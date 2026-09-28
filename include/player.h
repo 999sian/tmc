@@ -774,7 +774,7 @@ void AddInteractableAsMinishObject(Entity*);
 void sub_08078D60(void);
 void PlayerSetNormalAndCollide(void);
 bool32 PlayerTryDropObject(ItemBehavior* arg0, u32 unk);
-void InitItemGetSequence(u32, u32, u32);
+bool32 InitItemGetSequence(u32, u32, u32);
 void sub_0807B7D8(u32 tileType, u32 tilePos, u32 layer);
 void SetInteractableObjectCollision(Entity*, u32, u32, const void*);
 void sub_08079D84(void);

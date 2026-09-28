@@ -21,7 +21,8 @@ void Port_M4A_Backend_StopPlayer(uint8_t playerIndex);
 void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex);
 void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, uint16_t volume);
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan);
-void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute);
+/* Interleaved stereo float in int16 scale (±32767), unclamped. */
+void Port_M4A_Backend_Render(float* outSamples, uint32_t frameCount, bool mute);
 const char* Port_GetSongLabel(uint16_t songId);
 /* Returns true while the player still has tracks actively running (i.e. song
  * hasn't reached its `ply_fine`). Used to detect when a high-priority SFX has
@@ -31,7 +32,7 @@ bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex);
 /* GBA-accurate audio toggle. When true, the synth uses NEAREST resampling
  * (the GBA's no-interpolation sample-and-hold "crunch") and no forced reverb,
  * for A/B comparison against hardware/mGBA. When false (default), the enhanced
- * path (SINC resampling) is used. The output-DSP post-process bypass lives on
+ * path (BLEP/BLAMP resampling) is used. The output-DSP post-process bypass lives on
  * the Port_Audio side; this controls only the agbplay synth knobs. */
 void Port_M4A_Backend_SetGbaAccurate(bool accurate);
 bool Port_M4A_Backend_GetGbaAccurate(void);

@@ -14,7 +14,7 @@ void Port_Audio_Reset(void);
 /* GBA-accurate audio toggle (F8 → Audio). This is the single front door:
  * it records the flag the audio thread reads to bypass the output-DSP
  * post-process chain, AND forwards to the synth backend (NEAREST resampling,
- * no forced reverb). Default off = enhanced (SINC + full DSP chain). */
+ * no forced reverb). Default off = enhanced (BLEP/BLAMP + DSP chain). */
 void Port_Audio_SetGbaAccurate(bool accurate);
 bool Port_Audio_IsGbaAccurate(void);
 

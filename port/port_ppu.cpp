@@ -625,10 +625,11 @@ extern "C" void Port_PPU_SetPersistence(bool enabled, float rho) {
 }
 
 /* Colour-correct `count` ABGR8888 pixels in place via the per-channel LUT.
- * No-op when disabled. Shared by the native post-process and the GPU
+ * No-op when disabled. Shared by the native post-process, the GPU
  * supersample buffer (per-pixel LUT commutes with S*S replication, so applying
- * it to the S*S buffer matches applying it to the native frame then scaling). */
-static void Port_PPU_ColorCorrectBuffer(uint32_t* buf, int count) {
+ * it to the S*S buffer matches applying it to the native frame then scaling)
+ * and the 3D view's palette/screen layers (port_voxel.cpp). */
+extern "C" void Port_PPU_ColorCorrectBuffer(uint32_t* buf, int count) {
     if (!sColorCorrectEnabled || !sColorLutReady) {
         return;
     }

@@ -24,7 +24,7 @@ static SDL_AudioStream* sAudioStream;
  * stopped touching the filter statics. */
 static bool sGbaAccurate = false;
 
-/* Mid/side widen gain for post-process stage 3 (F8 → Audio "Stereo width").
+/* Mid/side widen gain for post-process stage 2 (F8 → Audio "Stereo width").
  * Default 1.20 = the long-standing shipped image. Written on the main thread,
  * read once per PostProcess call on the audio thread; relaxed atomics suffice
  * (a rarely-changing float that touches no other state, and the widen is
@@ -34,33 +34,31 @@ static float sWidth = 1.20f;
 
 /* ---- Output DSP post-processing chain ------------------------------
  *
- * Runs after agbplay's MP2K render, before the buffer is handed to
- * SDL. The chain is:
+ * Runs on agbplay's unclamped float mix (int16 scale) before the one and
+ * only quantization to int16 for SDL. The chain is:
  *
  *   1. DC-blocking high-pass at ~30 Hz. Removes any DC offset
  *      introduced by the synthesis path and subsonic energy that no
  *      consumer speaker can reproduce.
  *
- *   2. Two-pole Butterworth low-pass at ~16 kHz. Sharper roll-off
- *      than the previous one-pole and stays effectively flat in band
- *      below ~12 kHz; eliminates the lingering high-frequency
- *      aliasing tail from PCM resampling.
+ *   (No low-pass: agbplay's BLEP/BLAMP resamplers are already band-limited,
+ *   so a fixed 16 kHz biquad only dulled hi-hats and noise-channel snaps.)
  *
- *   3. Mid/side stereo widening. TMC's MP2K mix is mostly mono — pan
+ *   2. Mid/side stereo widening. TMC's MP2K mix is mostly mono — pan
  *      values cluster around centre. Boosting the side component opens
  *      the stereo image without altering the mid, so mono playback
  *      collapses cleanly to the original mix. The side gain defaults to
  *      1.20 (the long-standing shipped value) and is runtime-settable
  *      via the F8 → Audio "Stereo width" slider (sWidth).
  *
- *   4. Soft saturation via tanh-style curve — peaks above 25 000 round
+ *   3. Soft saturation via tanh-style curve — peaks above 25 000 round
  *      off smoothly instead of flattening, preserving perceived loudness
  *      on dense passages (multiple lead voices). This is intentionally
  *      the ONLY dynamics processing: no compressor/limiter, because a
  *      time-constant'd glue stage would pump on TMC's dense ~60 Hz
  *      transient stream and smear the staccato PSG snap. There is no
- *      makeup gain — the upstream agbplay float mix is already bounded
- *      before the int16 cast, so the chain only ever shapes, never lifts.
+ *      makeup gain — the chain only ever shapes, never lifts. Overs
+ *      reach this stage intact (the backend no longer hard-clamps).
  *
  * Any musical reverb lives SYNTH-SIDE (agbplay's PCM-only comb, F8 →
  * Audio "Reverb"), NOT here: an output-stage reverb would act on the
@@ -76,31 +74,6 @@ static const float kHpAlpha = 0.99607f;
 static float sHpPrevInL = 0.0f, sHpPrevInR = 0.0f;
 static float sHpPrevOutL = 0.0f, sHpPrevOutR = 0.0f;
 
-/* Two-pole Butterworth low-pass biquad at fc=16 kHz, fs=48 kHz, Q=0.707.
- * Coefficients computed offline:
- *   omega   = 2*pi*16000/48000 = 2.094395
- *   alpha   = sin(omega) / (2*Q) = 0.612372
- *   cos_w   = -0.5
- *   b0 = (1 - cos_w) / 2 / a0
- *   b1 = (1 - cos_w)     / a0
- *   b2 = (1 - cos_w) / 2 / a0
- *   a1 = -2 * cos_w      / a0     (= +0.620203 — POSITIVE here because
- *                                  cos_w is negative)
- *   a2 = (1 - alpha)     / a0
- *   a0 = 1 + alpha = 1.612372
- *
- * Issue #115: kLpA1 was previously stored with the wrong sign, giving
- * a DC gain of ~3.0 — the soft-clip stage then squashed every loud
- * passage, producing the "horribly compressed" intro audio reported
- * on Linux Bazzite. The canonical sign restores unity DC gain. */
-static const float kLpB0 = 0.4651777f;
-static const float kLpB1 = 0.9303554f;
-static const float kLpB2 = 0.4651777f;
-static const float kLpA1 = 0.6202032f;
-static const float kLpA2 = 0.2403461f;
-static float sLpX1L = 0.0f, sLpX2L = 0.0f, sLpY1L = 0.0f, sLpY2L = 0.0f;
-static float sLpX1R = 0.0f, sLpX2R = 0.0f, sLpY1R = 0.0f, sLpY2R = 0.0f;
-
 /* Set by the game thread (reset / GBA-accurate toggle), consumed on the audio
  * thread at the top of PostProcess. The actual memset MUST happen on the audio
  * thread so it never races the callback reading these statics mid-buffer. */
@@ -111,8 +84,6 @@ static int sFilterClearPending = 0;
  * click-free) can't drift if a future IIR stage adds more state. */
 static inline void Port_Audio_ClearFilterState(void) {
     sHpPrevInL = sHpPrevInR = sHpPrevOutL = sHpPrevOutR = 0.0f;
-    sLpX1L = sLpX2L = sLpY1L = sLpY2L = 0.0f;
-    sLpX1R = sLpX2R = sLpY1R = sLpY2R = 0.0f;
 }
 
 static inline float Port_Audio_SoftClip(float x) {
@@ -138,7 +109,7 @@ static inline float Port_Audio_SoftClip(float x) {
     return sign * (kThreshold + bent);
 }
 
-static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
+static void Port_Audio_PostProcess(const float* in, int16_t* out, int frames) {
     /* Read the width gain once per call (not per sample). __atomic_load (the
        generic form) is used because __atomic_load_n rejects float. Clamp
        defensively to the slider's range in case of an out-of-band write. */
@@ -157,8 +128,8 @@ static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
     }
 
     for (int i = 0; i < frames; ++i) {
-        float l = (float)buffer[i * 2 + 0];
-        float r = (float)buffer[i * 2 + 1];
+        const float l = in[i * 2 + 0];
+        const float r = in[i * 2 + 1];
 
         /* 1. High-pass DC blocker. */
         const float hpL = kHpAlpha * (sHpPrevOutL + l - sHpPrevInL);
@@ -168,30 +139,14 @@ static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
         sHpPrevInR = r;
         sHpPrevOutR = hpR;
 
-        /* 2. Two-pole low-pass. */
-        const float lpL = kLpB0 * hpL + kLpB1 * sLpX1L + kLpB2 * sLpX2L - kLpA1 * sLpY1L - kLpA2 * sLpY2L;
-        const float lpR = kLpB0 * hpR + kLpB1 * sLpX1R + kLpB2 * sLpX2R - kLpA1 * sLpY1R - kLpA2 * sLpY2R;
-        sLpX2L = sLpX1L;
-        sLpX1L = hpL;
-        sLpY2L = sLpY1L;
-        sLpY1L = lpL;
-        sLpX2R = sLpX1R;
-        sLpX1R = hpR;
-        sLpY2R = sLpY1R;
-        sLpY1R = lpR;
+        /* 2. Mid/side widen — scale side only, so mono playback collapses
+         *    cleanly to the original mix. */
+        const float mid = (hpL + hpR) * 0.5f;
+        const float side = (hpL - hpR) * 0.5f * w;
 
-        /* 3. Mid/side widen — boost side by 20 %, leave mid alone so
-         *    mono playback collapses cleanly to the original mix. */
-        const float mid = (lpL + lpR) * 0.5f;
-        const float side = (lpL - lpR) * 0.5f * w;
-        const float wL = mid + side;
-        const float wR = mid - side;
-
-        /* 4. Soft-clip + cast back to int16. */
-        const float ol = Port_Audio_SoftClip(wL);
-        const float or_ = Port_Audio_SoftClip(wR);
-        buffer[i * 2 + 0] = (int16_t)ol;
-        buffer[i * 2 + 1] = (int16_t)or_;
+        /* 3. Soft-clip, then the single rounding to int16. */
+        out[i * 2 + 0] = (int16_t)lrintf(Port_Audio_SoftClip(mid + side));
+        out[i * 2 + 1] = (int16_t)lrintf(Port_Audio_SoftClip(mid - side));
     }
 }
 
@@ -241,6 +196,7 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
 
     while (remaining > 0) {
         int frames = remaining / PORT_AUDIO_BYTES_PER_FRAME;
+        float mix[1024 * PORT_AUDIO_CHANNELS];
         int16_t buffer[1024 * PORT_AUDIO_CHANNELS];
 
         if (frames <= 0) {
@@ -253,17 +209,19 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
         /* gMain.muteAudio is written on the main thread; read it with a relaxed
            atomic load here on the SDL audio thread to avoid a data race. It is a
            rarely-changing u8 flag, so relaxed ordering is sufficient. */
-        Port_M4A_Backend_Render(buffer, (uint32_t)frames, __atomic_load_n(&gMain.muteAudio, __ATOMIC_RELAXED) != 0);
+        Port_M4A_Backend_Render(mix, (uint32_t)frames, __atomic_load_n(&gMain.muteAudio, __ATOMIC_RELAXED) != 0);
         /* GBA-accurate mode hands the synth output straight to SDL — no
-           HPF/LPF/widen/soft-clip coloring — for A/B comparison against
+           HPF/widen/soft-clip coloring — for A/B comparison against
            hardware/mGBA. The synth-side knobs (NEAREST resampling) are set
            separately via the backend. */
         if (!__atomic_load_n(&sGbaAccurate, __ATOMIC_ACQUIRE)) {
-            Port_Audio_PostProcess(buffer, frames);
+            Port_Audio_PostProcess(mix, buffer, frames);
         } else {
-            /* Emulate 9-bit PWM DAC quantization of GBA hardware (SOUNDBIAS=9). */
+            /* Hard clamp, then emulate 9-bit PWM DAC quantization of GBA
+               hardware (SOUNDBIAS=9). */
             for (int i = 0; i < frames * PORT_AUDIO_CHANNELS; ++i) {
-                buffer[i] = (int16_t)((buffer[i] / 128) * 128);
+                const float s = mix[i] > 32767.0f ? 32767.0f : (mix[i] < -32767.0f ? -32767.0f : mix[i]);
+                buffer[i] = (int16_t)(((int)s / 128) * 128);
             }
         }
         /* Accessibility tone cues: summed on top of the game mix (after the
@@ -303,8 +261,8 @@ bool Port_Audio_Init(void) {
      * scale it to the hardware: on a WEAK cluster (max CPU freq below ~1.8 GHz,
      * i.e. the low-clocked in-order A53 class like the G4) default to a larger
      * buffer; leave the low-latency default on faster devices (e.g. Tab A7's
-     * 2.0 GHz A73s). Together with the LINEAR resampler (port_m4a_backend.cpp)
-     * this cut G4 underruns from ~8-35/s to ~3-6/s. Explicit override always
+     * 2.0 GHz A73s). Together with the (then) LINEAR resampler this cut G4
+     * underruns from ~8-35/s to ~3-6/s. Explicit override always
      * wins: env TMC_AUDIO_FRAMES=<n> or an `audio_frames` marker file. */
     /* NOTE: SDL_HINT_THREAD_PRIORITY_POLICY was intended to give the audio
      * thread SCHED_FIFO, but Android denies realtime scheduling to unprivileged

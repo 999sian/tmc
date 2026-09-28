@@ -4412,7 +4412,12 @@ u32 sub_unk3_HyruleTown_0(void) {
     }
     sub_0804AFB0(
 #ifdef PC_PORT
-        (void**)(((void**)gAreaTable[2])[gSave.global_progress])
+        /* Story-skip (TABIDACHI at gp 1, see the gate below): Area_HyruleTown[1]
+         * is the festival room (Npc4EIntroTown + Zelda), which would replay the
+         * festival cutscene in the real town. Use the post-intro gp 2 set. */
+        (void**)(((void**)gAreaTable[2])[(gSave.global_progress == 1 && CheckGlobalFlag(TABIDACHI))
+                                              ? 2
+                                              : gSave.global_progress])
 #else
         (void**)(Area_HyruleTown[gSave.global_progress])
 #endif

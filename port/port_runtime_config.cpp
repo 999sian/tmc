@@ -101,6 +101,10 @@ bool sConsoleParity = false;
 bool sDecoupleRender = true;
 /* On-screen FPS/TPS counter overlay (top-right HUD, port_imgui_menu.cpp). */
 bool sShowFps = false;
+/* Experimental 3D room view on the SDL_GPU backend (port_voxel.cpp). */
+bool sVoxelView = false;
+/* Voxel view camera elevation in degrees (F8 stepper). */
+int sVoxelPitch = 50;
 int sPreferredRegion = -1;
 int sPreferredLanguage = -1;
 /* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
@@ -115,7 +119,7 @@ u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
-bool sTtsEnabled = true;
+bool sTtsEnabled = false;
 float sTtsRate = 0.5f;
 float sTtsPitch = 0.5f;
 float sTtsVolume = 0.8f;
@@ -266,7 +270,8 @@ const BoolCfg kBoolCfg[] = {
     { "console_parity", &sConsoleParity, false },
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
-    { "tts_enabled", &sTtsEnabled, true },
+    { "voxel_view", &sVoxelView, false },
+    { "tts_enabled", &sTtsEnabled, false },
     { "a11y_cues", &sA11yCues, false },
     { "a11y_footsteps", &sA11yFootsteps, false },
     { "a11y_hazards", &sA11yHazards, false },
@@ -311,7 +316,7 @@ const IntCfg kIntCfg[] = {
     { "preferred_region", &sPreferredRegion, -1 },      { "preferred_language", &sPreferredLanguage, -1 },
     { "rando_item_pool", &sRandoItemPool, 0 },          { "rando_tunic_color", &sRandoTunicColor, 0 },
     { "rando_heart_color", &sRandoHeartColor, 0 },      { "rando_tricks", &sRandoTricks, 0 },
-    { "rando_accessibility", &sRandoAccessibility, 0 },
+    { "rando_accessibility", &sRandoAccessibility, 0 }, { "voxel_pitch", &sVoxelPitch, 50 },
 };
 const StrCfg kStrCfg[] = {
     { "upscale_method", &sUpscaleMethod, "nearest" },
@@ -845,6 +850,28 @@ extern "C" bool Port_Config_GetShowFps(void) {
 extern "C" void Port_Config_SetShowFps(bool on) {
     sShowFps = on;
     sConfigJson["show_fps"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetVoxelView(void) {
+    return sVoxelView;
+}
+extern "C" void Port_Config_SetVoxelView(bool on) {
+    sVoxelView = on;
+    sConfigJson["voxel_view"] = on;
+    SaveConfig();
+}
+/* Camera elevation presets, low (dramatic) to near top-down. */
+static const int kVoxelPitches[] = { 30, 40, 50, 60, 75 };
+extern "C" int Port_Config_GetVoxelPitch(void) {
+    return std::clamp(sVoxelPitch, 20, 85);
+}
+extern "C" void Port_Config_CycleVoxelPitch(int dir) {
+    int i = 0;
+    while (i < 4 && kVoxelPitches[i] < sVoxelPitch)
+        ++i;
+    i = std::clamp(i + (dir < 0 ? -1 : 1), 0, 4);
+    sVoxelPitch = kVoxelPitches[i];
+    sConfigJson["voxel_pitch"] = sVoxelPitch;
     SaveConfig();
 }
 

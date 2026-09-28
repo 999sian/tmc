@@ -64,6 +64,8 @@ unsigned Port_PPU_DisplayRefreshRate(void);
 // fraction of the previous frame retained; values outside [0,1) are ignored.
 void Port_PPU_SetColorCorrection(bool enabled);
 bool Port_PPU_ColorCorrectionEnabled(void);
+// Apply the colour-correction LUT (if enabled) to `count` ABGR8888 pixels.
+void Port_PPU_ColorCorrectBuffer(uint32_t* buf, int count);
 void Port_PPU_SetPersistence(bool enabled, float rho);
 
 // Cleanup

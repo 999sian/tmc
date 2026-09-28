@@ -87,7 +87,9 @@ struct BackendState {
     uint32_t soundMode = 0;
     std::unique_ptr<Rom> rom;
     std::unique_ptr<MP2KContext> ctx;
-    std::vector<int16_t> pendingSamples;
+    /* Float mix in int16 scale, UNCLAMPED: port_audio.c's post-process chain
+     * soft-clips and quantizes exactly once. */
+    std::vector<float> pendingSamples;
     size_t pendingFrameOffset = 0;
     std::array<size_t, kSongCount> songHeaderOffsets;
     uint8_t trackVolumes[kPlayerCount][kMaxTracks];
@@ -97,7 +99,7 @@ struct BackendState {
      * effectively idempotent for repeated calls; agbplay's m4aMPlayStart
      * restarts unconditionally and that's audible as music resetting). */
     uint16_t currentSongId[kPlayerCount];
-    /* GBA-accurate audio toggle (F8 → Audio). false = enhanced (SINC); true =
+    /* GBA-accurate audio toggle (F8 → Audio). false = enhanced (BLEP/BLAMP); true =
      * NEAREST sample-and-hold + no forced reverb. Read by MakeAgbplayMode when
      * the context is (re)built, and mutated live by SetGbaAccurate. */
     bool gbaAccurate = false;
@@ -177,35 +179,14 @@ static MP2KSoundMode MakeSoundMode(void) {
 
 static AgbplaySoundMode MakeAgbplayMode(void) {
     AgbplaySoundMode mode;
-    /* Use SINC resampling for both pitch-bent and fixed-rate PCM samples.
-     * The GBA's hardware uses a no-interpolation nearest-neighbour fetch,
-     * giving its characteristic aliased "crunch" — agbplay's LINEAR (the
-     * previous default) softens that, but SINC is the bandlimited
-     * resampler proper and removes virtually all imaging artefacts at
-     * the cost of a few hundred extra MAC ops per audio frame. CPU
-     * overhead is negligible on PC. */
-    /* GBA-accurate mode (F8 → Audio toggle) uses NEAREST — the hardware's
-     * no-interpolation sample-and-hold fetch and its characteristic aliased
-     * "crunch". The default enhanced path uses SINC, the bandlimited resampler
-     * proper, which removes virtually all imaging artefacts for a few hundred
-     * extra MAC ops per audio frame (negligible on PC). */
-    /* Resampler cost on weak in-order ARM: SINC is a few-hundred-MAC bandlimited
-     * filter per audio frame — negligible on desktop, but MEASURED at ~17-20 ms
-     * of synth work per 20 ms buffer on a Moto G4 (Cortex-A53) once several PCM
-     * channels are live (e.g. the item-get fanfare), i.e. ~85-100% of realtime,
-     * so any scheduling jitter underran the audio (audible crackle/lag). LINEAR
-     * is a 2-tap interpolation — a fraction of SINC's cost — and still avoids
-     * NEAREST's raw aliasing, so the enhanced path stays smooth on Android while
-     * fitting the CPU budget. Desktop keeps SINC (the cleanest resampler; cost is
-     * irrelevant there). GBA-accurate mode is NEAREST everywhere (hardware exact). */
-#ifdef __ANDROID__
-    const ResamplerType enhancedRs = ResamplerType::LINEAR;
-#else
-    const ResamplerType enhancedRs = ResamplerType::SINC;
-#endif
-    const ResamplerType rs = sState.gbaAccurate ? ResamplerType::NEAREST : enhancedRs;
-    mode.resamplerTypeNormal = rs;
-    mode.resamplerTypeFixed = rs;
+    /* PCM resampling. GBA-accurate mode is NEAREST (the hardware's
+     * no-interpolation sample-and-hold "crunch"). Enhanced mode uses agbplay's
+     * own defaults: BLAMP for pitched and BLEP for fixed-rate samples, i.e.
+     * band-limited reproductions of the hardware's stepped/linear fetch — the
+     * GBA character without its aliasing. SINC (the old desktop default) treats
+     * 8-bit samples as band-limited signals and comes out duller than hardware. */
+    mode.resamplerTypeNormal = sState.gbaAccurate ? ResamplerType::NEAREST : ResamplerType::BLAMP;
+    mode.resamplerTypeFixed = sState.gbaAccurate ? ResamplerType::NEAREST : ResamplerType::BLEP;
     mode.reverbType = ReverbType::NORMAL;
     /* Forced PCM reverb. reverbForce must carry REV_MASK_SET (0x80) to engage
      * (sState.reverbForceByte is 0x00 by default = OFF/dry, or 0x80|level when
@@ -712,18 +693,15 @@ static void RenderChunkLocked(void) {
                 sawNonFinite = true;
             }
 
-            left = std::clamp(left, -1.0f, 1.0f);
-            right = std::clamp(right, -1.0f, 1.0f);
-
-            sState.pendingSamples[sampleIndex * 2 + 0] = static_cast<int16_t>(std::lround(left * 32767.0f));
-            sState.pendingSamples[sampleIndex * 2 + 1] = static_cast<int16_t>(std::lround(right * 32767.0f));
+            sState.pendingSamples[sampleIndex * 2 + 0] = left * 32767.0f;
+            sState.pendingSamples[sampleIndex * 2 + 1] = right * 32767.0f;
         }
         if (sawNonFinite) {
             AudioGuardWarn("RenderChunkLocked", "non-finite sample from mixer replaced with silence");
         }
     } catch (const std::exception& e) {
         AudioGuardWarn("RenderChunkLocked", e.what());
-        std::fill(sState.pendingSamples.begin(), sState.pendingSamples.end(), static_cast<int16_t>(0));
+        std::fill(sState.pendingSamples.begin(), sState.pendingSamples.end(), 0.0f);
     }
 }
 
@@ -1011,13 +989,8 @@ void Port_M4A_Backend_SetGbaAccurate(bool accurate) {
      * is captured into each ReverbEffect's cached intensity, refreshed only by
      * SoundMixer::UpdateReverb() — so set the field AND call UpdateReverb() to
      * apply it live. MakeAgbplayMode also honours these on a later rebuild. */
-#ifdef __ANDROID__
-    const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::LINEAR;
-#else
-    const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::SINC;
-#endif
-    sState.ctx->agbplaySoundMode.resamplerTypeNormal = rs;
-    sState.ctx->agbplaySoundMode.resamplerTypeFixed = rs;
+    sState.ctx->agbplaySoundMode.resamplerTypeNormal = accurate ? ResamplerType::NEAREST : ResamplerType::BLAMP;
+    sState.ctx->agbplaySoundMode.resamplerTypeFixed = accurate ? ResamplerType::NEAREST : ResamplerType::BLEP;
     sState.ctx->agbplaySoundMode.reverbForce = accurate ? 0 : sState.reverbForceByte;
     sState.ctx->mixer.UpdateReverb();
 }
@@ -1062,7 +1035,7 @@ void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_
     SubmitCommand(c);
 }
 
-void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute) {
+void Port_M4A_Backend_Render(float* outSamples, uint32_t frameCount, bool mute) {
     uint32_t framesRemaining = frameCount;
 
     if (outSamples == nullptr) {
@@ -1088,7 +1061,7 @@ void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute
             DrainCommandsLocked();
 
             if (!sState.ctx) {
-                memset(outSamples, 0, sizeof(int16_t) * framesRemaining * 2);
+                memset(outSamples, 0, sizeof(float) * framesRemaining * 2);
                 return;
             }
 
@@ -1101,16 +1074,16 @@ void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute
 
             availableFrames = (sState.pendingSamples.size() / 2) - sState.pendingFrameOffset;
             if (availableFrames == 0) {
-                memset(outSamples, 0, sizeof(int16_t) * framesRemaining * 2);
+                memset(outSamples, 0, sizeof(float) * framesRemaining * 2);
                 return;
             }
 
             copyFrames = std::min<size_t>(availableFrames, framesRemaining);
             if (mute) {
-                memset(outSamples, 0, sizeof(int16_t) * copyFrames * 2);
+                memset(outSamples, 0, sizeof(float) * copyFrames * 2);
             } else {
                 memcpy(outSamples, &sState.pendingSamples[sState.pendingFrameOffset * 2],
-                       sizeof(int16_t) * copyFrames * 2);
+                       sizeof(float) * copyFrames * 2);
             }
 
             outSamples += copyFrames * 2;
@@ -1123,6 +1096,6 @@ void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute
         AudioGuardWarn("Port_M4A_Backend_Render", e.what());
         sState.ctx.reset();
         sState.rom.reset();
-        memset(outSamples, 0, sizeof(int16_t) * framesRemaining * 2);
+        memset(outSamples, 0, sizeof(float) * framesRemaining * 2);
     }
 }

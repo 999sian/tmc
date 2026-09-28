@@ -14,7 +14,7 @@ def main():
              '-Wno-multichar', '-ffunction-sections', '-fdata-sections', '-Wl,--gc-sections']
     failed = False
     with tempfile.TemporaryDirectory(prefix='tmc-persistence-test-') as directory:
-        tests = [('save_persistence', region, ['retail', 'legacy', 'legacy-default', 'backup', 'switch'])
+        tests = [('save_persistence', region, ['retail', 'legacy', 'legacy-beaten', 'backup', 'switch'])
                  for region in ('USA', 'EU', 'JP')]
         tests += [('quicksave_entities', 'USA', ['restore']), ('softslot_ownership', 'USA', ['ownership'])]
         for name, region, cases in tests:

@@ -28,6 +28,8 @@
 #
 # Env:
 #   TMC_PC        path to the built game   (default build/pc/tmc_pc)
+#                 (needs the repro harness: build.py builds, debug builds, or
+#                 `xmake f --repro_harness=y`; see docs/env-vars.md)
 #   TMC_BASEROM   path to the ROM          (default baserom.gba)
 #   TMC_REGION    label written to golden  (default usa)
 #   MODE1_GBA_WIDTH  render width define   (default 240)

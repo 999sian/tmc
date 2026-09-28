@@ -16,6 +16,7 @@
 #include "port_gpu_renderer.h"
 #include "port_imgui_menu.h"
 #include "port_runtime_config.h"
+#include "port_voxel.h"
 
 #ifndef TMC_GPU_RENDERER
 
@@ -686,6 +687,20 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * immediately. */
     Port_ImGui_PrepareDrawDataGpu(cmd);
 
+    /* Experimental 3D room view: owns the swapchain clear + draw when it
+     * applies this frame; ImGui then overlays in a LOAD pass. */
+    if (Port_Voxel_Present(cmd, swap_tex, (int)swap_w, (int)swap_h)) {
+        SDL_GPUColorTargetInfo ovl = {};
+        ovl.texture = swap_tex;
+        ovl.load_op = SDL_GPU_LOADOP_LOAD;
+        ovl.store_op = SDL_GPU_STOREOP_STORE;
+        SDL_GPURenderPass* orp = SDL_BeginGPURenderPass(cmd, &ovl, 1, nullptr);
+        Port_ImGui_RenderDrawDataGpu(cmd, orp);
+        SDL_EndGPURenderPass(orp);
+        SDL_SubmitGPUCommandBuffer(cmd);
+        return true;
+    }
+
     /* Stage 5+C step 5: if a libretro .glslp preset is loaded, route
      * the full render through its multi-pass pipeline and skip the
      * stock single-pass shader entirely. ImGui still gets a chance to
@@ -1060,6 +1075,7 @@ extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
 }
 
 extern "C" void Port_GPU_Shutdown(void) {
+    Port_Voxel_Shutdown();
     for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
         if (sPipelines[i]) {
             SDL_ReleaseGPUGraphicsPipeline(sDevice, sPipelines[i]);

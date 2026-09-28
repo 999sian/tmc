@@ -134,7 +134,9 @@ static StateRegion sRegions[] = {
         * v6: entity subclass layouts changed; older    \
         * snapshots are rejected.                       \
         * v7: entity bookkeeping and per-region bases   \
-        * for relocating both nodes and list sentinels. */
+        * for relocating both nodes and list sentinels. \
+        * v7 is also the first with gSave.flags at the  \
+        * retail 0x25C; v6 may hold the old PC layout. */
 
 typedef struct {
     u8* snapshot; /* heap, NULL if slot empty */

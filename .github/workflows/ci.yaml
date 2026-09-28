@@ -1,3 +1,22 @@
+# ROM-gated boot smoke (job `rom-smoke`)
+# --------------------------------------
+# A retail ROM can't be committed, so the headless boot of the shipped
+# binary against the real game only runs when this repo secret is set:
+#
+#   BASEROM_USA_URL  HTTPS (or any curl-supported) URL serving the retail
+#                    USA ROM, e.g. a presigned object-storage link. It is
+#                    verified against the retail SHA-1 before use, so a wrong
+#                    or corrupt file fails loudly instead of flaking.
+#
+#   gh secret set BASEROM_USA_URL --body 'https://.../baserom.gba?sig=...'
+#
+# The ROM itself can't be the secret: GitHub caps secrets at 48 KB and the
+# ROM is 16 MiB. Without the secret (not configured, or a fork PR, where
+# GitHub withholds secrets) the job emits a notice and skips its steps.
+# It reuses the Linux x86_64 tmc_pc artifact uploaded by _build.yaml — no
+# rebuild. PPU parity (tools/ppu_parity_check.sh) and the EU/JP boots stay
+# in _build.yaml, gated on the ASSETS_TOKEN + vars.ASSETS_REPO route.
+
 name: CI Build
 
 on:
@@ -62,3 +81,86 @@ jobs:
       TMC_DISCORD_APP_ID: ${{ secrets.TMC_DISCORD_APP_ID }}
       ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+  rom-smoke:
+    name: ROM boot smoke (Linux x86_64)
+    needs: [meta, build]
+    # Only these filters build the linux x86_64 leg whose artifact we test.
+    if: ${{ !inputs.os_filter || contains(fromJSON('["all","x86","linux"]'), inputs.os_filter) }}
+    # Same image as the artifact's build leg (glibc 2.35).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      # Secrets can't gate a step-level `if:`, so probe in bash (same pattern
+      # as _build.yaml's ASSETS_TOKEN probe).
+      - name: Fetch USA ROM from BASEROM_USA_URL
+        id: rom
+        shell: bash
+        env:
+          BASEROM_USA_URL: ${{ secrets.BASEROM_USA_URL }}
+        run: |
+          if [ -z "$BASEROM_USA_URL" ]; then
+            echo "::notice title=ROM boot smoke skipped::BASEROM_USA_URL secret not available (unset, or a fork PR)."
+            echo "have_rom=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rom="$RUNNER_TEMP/baserom_usa.gba"
+          curl -fsSL --retry 3 -o "$rom" "$BASEROM_USA_URL"
+          # Retail "Legend of Zelda, The - The Minish Cap (USA)" SHA-1.
+          echo "b4bd50e4131b027c334547b4524e2dbbd4227130  $rom" | sha1sum -c -
+          echo "TMC_BASEROM=$rom" >> "$GITHUB_ENV"
+          echo "have_rom=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux x86_64 build artifact
+        if: steps.rom.outputs.have_rom == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          # Name built by _build.yaml's "Create archive" step.
+          name: tmc-multi-linux-x86_64-${{ needs.meta.outputs.stamp }}.tar.gz
+          path: ${{ runner.temp }}/artifact
+
+      - name: Unpack tmc_pc and install its runtime libraries
+        if: steps.rom.outputs.have_rom == 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgles2 libgomp1 libpng16-16 libcurl4
+          mkdir -p "$RUNNER_TEMP/tmc"
+          tar -xzf "$RUNNER_TEMP"/artifact/*.tar.gz -C "$RUNNER_TEMP/tmc"
+          test -x "$RUNNER_TEMP/tmc/tmc_pc"
+          echo "TMC_PC=$RUNNER_TEMP/tmc/tmc_pc" >> "$GITHUB_ENV"
+
+      # Boot to the port's success marker, then keep running 10 s so a crash
+      # in the first gameplay frames also fails. Scratch cwd keeps config.json
+      # and saves hermetic; first boot self-extracts assets (hence 180 s).
+      - name: Headless boot smoke test
+        if: steps.rom.outputs.have_rom == 'true'
+        shell: bash
+        run: |
+          BOOT_DIR=$(mktemp -d)
+          env TMC_AUTOPLAY=1 TMC_NO_UPDATE_CHECK=1 \
+            SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+            sh -c "cd '$BOOT_DIR' && exec '$TMC_PC' --no-audio" > "$BOOT_DIR/boot.log" 2>&1 &
+          pid=$!
+          ok=0
+          for _ in $(seq 1 180); do
+            if grep -q "Entering AgbMain" "$BOOT_DIR/boot.log"; then ok=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$ok" = 1 ]; then
+            sleep 10
+            kill -0 "$pid" 2>/dev/null || ok=0
+          fi
+          # SIGKILL: SDL maps SIGTERM to SDL_EVENT_QUIT, which in-game opens
+          # the save-before-quit modal instead of exiting (wait would hang).
+          kill -KILL "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          if [ "$ok" != 1 ]; then
+            echo "::error::tmc_pc did not reach AgbMain and stay up 10 s. Log tail:"
+            tail -40 "$BOOT_DIR/boot.log"
+            exit 1
+          fi
+          grep -m1 "Active region" "$BOOT_DIR/boot.log" || true
+          echo "OK: USA ROM boots to AgbMain and survives 10 s."

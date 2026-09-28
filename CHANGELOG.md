@@ -27,10 +27,12 @@
   float and quantizes once (loud passages soft-clip instead of hard-clipping),
   and no longer applies a 16 kHz low-pass.
 - Text-to-speech is off by default for new configs.
-- Retail/emulator saves retain their original flag layout. Old PC flag-layout
-  migration is now opt-in with `TMC_SAVE_MIGRATE_LEGACY_FLAGS=1`; use it only
-  for saves known to come from PC builds through v0.9.0. Migration requires a
-  successful `.bak` backup. `TMC_SAVE_RETAIL_LAYOUT=1` still prevents migration.
+- Saves from PC builds through v0.9.0 (flags one byte before the retail
+  offset) are recognized and migrated automatically again, keeping the
+  original as `.bak`; retail/emulator saves keep their layout. Detection reads
+  the retail padding byte and the START/OUTDOOR story flags.
+  `TMC_SAVE_RETAIL_LAYOUT=1` disables the migration and
+  `TMC_SAVE_MIGRATE_LEGACY_FLAGS=1` forces it for every unstamped slot.
 - Profile switches retain pending saves and report failure when disk writes fail.
 - Quicksaves restore entity lists, allocation counts, auxiliary entities and
   active item state together, including relocation between captured regions
@@ -52,6 +54,18 @@
 - Minish Woods fog and light rays continue across the full widescreen view.
 - Rolling room transitions temporarily use the native viewport, restoring
   the wide camera and refreshing the tilemap on completion.
+- Swimming up into the kinstone-opened waterfalls in Hyrule Town and Veil
+  Falls enters their caves again on 64-bit builds (#195): the entrance trigger
+  now gets its real position instead of the room's top-left corner.
+- Story-skipped saves (intro over, Deepwood not cleared) no longer replay the
+  Picori Festival cutscene with Zelda on entering Hyrule Town.
+- Debug warps (F8 → Warp, repro harnesses) to Festival Town no longer crash
+  outside the prologue: they enter through Hyrule Town, which turns into the
+  festival only while the festival is on, as in the game.
+- New xmake option `repro_harness` compiles the `TMC_REPRO_*`/`TMC_PERFCAP`/
+  `TMC_ROOMCAP` test harnesses in debug builds and leaves them out of plain
+  release builds (`build.py` keeps them for CI). Every environment variable
+  the port reads is listed in `docs/env-vars.md`.
 
 ## v0.9.3 (2026-09-12)
 

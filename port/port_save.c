@@ -174,26 +174,57 @@ static int EepromStatusValidForData(const u8* ramImage, u32 statusOffset, u32 da
 }
 
 /* ---- SaveFile flag-layout migration ----------------------------------------
- * PC builds <= v0.9.0 lacked SaveFile.filler25B, so flags..dungeonWarps
- * (0x25B..0x48B) sat one byte before their retail offsets. Byte 0x4FF of a
- * slot (last byte of filler4ac) == 1 stamps the retail layout; src/save.c
- * WriteSaveFile sets it on every save. */
+ * PC builds <= v0.9.0 lacked KinstoneSave's tail pad, so flags..dungeonWarps
+ * (0x25B..0x48A) sat one byte before their retail offsets and 0x48B was
+ * padding. Byte 0x4FF of a slot (last byte of filler4ac) == 1 stamps the
+ * retail layout; src/save.c WriteSaveFile sets it on every save. */
 #define SAVE_SLOT_SIZE 0x500u
 #define SAVE_LAYOUT_STAMP_OFFSET 0x4FFu
 #define SAVE_LAYOUT_STAMP_RETAIL 0x01u
+#define SAVE_OLD_FLAGS 0x25Bu    /* retail: padding */
+#define SAVE_RETAIL_FLAGS 0x25Cu
+#define SAVE_OLD_PADDING 0x48Bu  /* retail: dungeonWarps[15] */
+#define SAVE_FLAG_START 0x13u    /* include/flags.h; global flags match in every region */
+#define SAVE_FLAG_OUTDOOR 0x49u
 
-/* Shift one unstamped, checksum-valid slot copy to the retail layout and
- * refresh every status copy that validated the old bytes. 1 when shifted. */
-static int MigrateSlotFlagLayout(u8* ramImage, u32 statusOffset, u32 dataOffset) {
+static int SlotFlag(const u8* data, u32 flagsOffset, u32 flag) {
+    return (data[flagsOffset + flag / 8] >> (flag % 8)) & 1;
+}
+
+/* Unstamped slots come from retail/emulators or from PC builds <= v0.9.0.
+ * Tell them apart by content (checked against real mGBA and old PC saves):
+ *  - Neither layout writes its padding byte, and the old layout keeps
+ *    flags[0] (the dungeon-clear flags) in the retail padding byte 0x25B.
+ *  - Every in-game save has START (the pause menu is enabled with it) and,
+ *    once Link leaves his house, OUTDOOR. Read at the wrong offset a flag
+ *    shows the ordinal 8 away (Gleerok defeated / bean thrown for START,
+ *    Goron restock 4 / game beaten for OUTDOOR), all set later in the game.
+ * A slot without START has no progress for the shift to move. */
+static int SlotHasLegacyFlagLayout(const u8* data) {
+    if (data[SAVE_OLD_PADDING] != 0)
+        return 0;
+    if (data[SAVE_OLD_FLAGS] != 0)
+        return 1;
+    if (!SlotFlag(data, SAVE_OLD_FLAGS, SAVE_FLAG_START))
+        return 0;
+    return !SlotFlag(data, SAVE_RETAIL_FLAGS, SAVE_FLAG_START) ||
+           (SlotFlag(data, SAVE_OLD_FLAGS, SAVE_FLAG_OUTDOOR) && !SlotFlag(data, SAVE_RETAIL_FLAGS, SAVE_FLAG_OUTDOOR));
+}
+
+/* Shift one unstamped, checksum-valid slot copy in the old layout (every
+ * unstamped copy when force) to the retail layout and refresh every status
+ * copy that validated the old bytes. 1 when shifted. */
+static int MigrateSlotFlagLayout(u8* ramImage, u32 statusOffset, u32 dataOffset, int force) {
     u8* data = ramImage + dataOffset;
     unsigned validMask = 0;
     for (unsigned copy = 0; copy < 2; ++copy)
         if (StatusChecksumCoversData(ramImage + statusOffset + copy * 8u, data, SAVE_SLOT_SIZE))
             validMask |= 1u << copy;
-    if (validMask == 0 || data[SAVE_LAYOUT_STAMP_OFFSET] == SAVE_LAYOUT_STAMP_RETAIL)
+    if (validMask == 0 || data[SAVE_LAYOUT_STAMP_OFFSET] == SAVE_LAYOUT_STAMP_RETAIL ||
+        !(force || SlotHasLegacyFlagLayout(data)))
         return 0;
-    memmove(data + 0x25C, data + 0x25B, 0x48B - 0x25B); /* 0x48B was PC padding */
-    data[0x25B] = 0;
+    memmove(data + SAVE_RETAIL_FLAGS, data + SAVE_OLD_FLAGS, SAVE_OLD_PADDING - SAVE_OLD_FLAGS);
+    data[SAVE_OLD_FLAGS] = 0;
     data[SAVE_LAYOUT_STAMP_OFFSET] = SAVE_LAYOUT_STAMP_RETAIL;
     for (unsigned copy = 0; copy < 2; ++copy) {
         if (!(validMask & (1u << copy)))
@@ -211,11 +242,11 @@ static int MigrateSlotFlagLayout(u8* ramImage, u32 statusOffset, u32 dataOffset)
 
 /* Migrate all 3 slots (both EEPROM copies each; src/save.c
  * gSaveFileEEPROMAddresses). Returns the number of copies shifted. */
-static int MigrateEepromFlagLayout(u8* ramImage) {
+static int MigrateEepromFlagLayout(u8* ramImage, int force) {
     int shifted = 0;
     for (u32 slot = 0; slot < 3; ++slot) {
-        shifted += MigrateSlotFlagLayout(ramImage, 0x30 + slot * 0x10, 0x80 + slot * SAVE_SLOT_SIZE);
-        shifted += MigrateSlotFlagLayout(ramImage, 0x1030 + slot * 0x10, 0x1080 + slot * SAVE_SLOT_SIZE);
+        shifted += MigrateSlotFlagLayout(ramImage, 0x30 + slot * 0x10, 0x80 + slot * SAVE_SLOT_SIZE, force);
+        shifted += MigrateSlotFlagLayout(ramImage, 0x1030 + slot * 0x10, 0x1080 + slot * SAVE_SLOT_SIZE, force);
     }
     return shifted;
 }
@@ -465,16 +496,16 @@ static void LoadEepromFile(void) {
         break;
     }
 
-    /* Retail and legacy PC slots can both lack our layout stamp. Absence
-     * is not proof of the old layout: migrate flags only on explicit opt-in.
-     * Keep the existing retail override as a veto for recovery scripts. */
+    /* Unstamped slots are migrated when SlotHasLegacyFlagLayout recognizes
+     * the old PC layout. Recovery overrides: TMC_SAVE_RETAIL_LAYOUT=1 never
+     * shifts; TMC_SAVE_MIGRATE_LEGACY_FLAGS=1 shifts every unstamped slot. */
     const char* retailEnv = getenv("TMC_SAVE_RETAIL_LAYOUT");
     const char* legacyEnv = getenv("TMC_SAVE_MIGRATE_LEGACY_FLAGS");
-    const int migrateFlags = legacyEnv && strcmp(legacyEnv, "1") == 0 &&
-                             !(retailEnv && *retailEnv && *retailEnv != '0');
+    const int neverShift = retailEnv && *retailEnv && *retailEnv != '0';
+    const int forceShift = legacyEnv && strcmp(legacyEnv, "1") == 0;
     u8 migrated[EEPROM_SIZE];
     memcpy(migrated, sEeprom, sizeof(migrated));
-    const int shifted = migrateFlags ? MigrateEepromFlagLayout(migrated) : 0;
+    const int shifted = neverShift ? 0 : MigrateEepromFlagLayout(migrated, forceShift);
 
     if (legacyRamOrder || shifted) {
         /* Keep the untouched on-disk bytes as .bak, then rewrite the file. */

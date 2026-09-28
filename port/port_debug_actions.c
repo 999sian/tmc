@@ -9,6 +9,8 @@
 #include "flags.h"
 #include "room.h"
 #include "area.h"
+#include "game.h"
+#include "tiles.h"
 #include "global.h"
 #include "common.h"
 #include "main.h"
@@ -363,6 +365,26 @@ int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room, u
     return 0;
 }
 
+/* Festival Town (AREA_FESTIVAL_TOWN, and Hyrule Town room 1: the same
+ * Room_HyruleTown_1 header in the town's gp-1 slot) is not a room of its
+ * own. The game enters it only through the prologue redirect in
+ * sub_unk3_HyruleTown_0 (gp 1, TABIDACHI clear), which also sets ZELDA_CHASE
+ * and the strip's map offset. Loaded directly in any other story state, its
+ * room init (sub_StateChange_HyruleTown_0) spawns the real town's entity
+ * lists, whose DelayedEntityLoadManagers read room properties 0x2d-0x3a past
+ * this header's ten: garbage NPC rows -> FOREST_MINISH form 2, past
+ * gNPCDefinition_3 -> LoadObjPalette palette count 0 -> its fill loop
+ * underflows over RAM (SIGSEGV). So enter through the town as the game does
+ * and let the redirect decide. The festival strip sits 0x130 px into the
+ * town, same y. */
+void Port_DebugAction_WarpEntry(unsigned char* area, unsigned char* room, unsigned short* x) {
+    if (*area == AREA_FESTIVAL_TOWN || (*area == AREA_HYRULE_TOWN && *room == 1)) {
+        *area = AREA_HYRULE_TOWN;
+        *room = 0;
+        *x += 0x130;
+    }
+}
+
 /* Trigger a warp by building a Transition struct in place and handing it
  * to DoExitTransition() — the exact path the wallmaster + scripted area
  * exits use, so the player ends up properly initialized (correct spawn
@@ -399,6 +421,7 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short
     if (Port_DebugAction_AreaIsWarpable(area) == 0) {
         return 0;
     }
+    Port_DebugAction_WarpEntry(&area, &room, &x);
 
     t.warp_type = WARP_TYPE_AREA;
     t.startX = 0;
@@ -428,50 +451,71 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short
      * outward from his arrival tile to find a walkable spot if he's
      * landed inside collision. Catches every room, including ones not
      * in the curated override table. See issue #94. */
-    Port_DebugAction_ArmWarpNudge();
+    Port_DebugAction_ArmWarpNudge(area, room);
     return 1;
 }
 
 /* -------- Auto safe-spawn nudge (issue #94) ----------------------- */
 
-/* After firing a debug warp, the room reload takes several frames
- * (fade-out, room swap, entity respawn, fade-in). We can't sample tile
- * collision until the destination room's tile/collision data is in
- * place. Arm a frame counter at warp time; the per-frame Tick checks
- * collision once it expires and, if Link is sitting on a non-walkable
- * tile, spirals outward to find the closest walkable tile and snaps
- * him there.
+/* The warp drops Link at a fixed point (room centre unless overridden).
+ * That point can be inside collision, or on a pit / hole / water / stairs
+ * tile that immediately carries him on to another room (so the warp never
+ * "lands"). Arm at warp time; the per-frame Tick waits for the destination
+ * room to be live, then spirals outward from Link's tile to the nearest
+ * plain floor and snaps him there, before the tile's effect can start.
  *
- * Spiral search keeps Link near the user's intended destination rather
- * than warping him to some arbitrary safe square. Radius is bounded
- * so we never silently teleport him across the room. */
+ * Spiral search keeps Link near the intended destination; the radius is
+ * bounded so we never silently teleport him across the room. */
 
 #include <stdio.h>
 
-#define WARP_NUDGE_DELAY_FRAMES 45 /* ~0.75s — covers fade + spawn */
-#define WARP_NUDGE_MAX_RADIUS 8    /* tiles (= 128 px) */
+#define WARP_NUDGE_TIMEOUT_FRAMES 240 /* give up if the room never loads */
+#define WARP_NUDGE_MAX_RADIUS 32      /* tiles; nearest first, so small moves stay small */
 
-static int sWarpNudgePending = 0;
+static int sWarpNudgePending = 0, sWarpNudgeChecked = 0;
+static unsigned char sWarpNudgeArea, sWarpNudgeRoom;
 
-void Port_DebugAction_ArmWarpNudge(void) {
-    sWarpNudgePending = WARP_NUDGE_DELAY_FRAMES;
+void Port_DebugAction_ArmWarpNudge(unsigned char area, unsigned char room) {
+    sWarpNudgePending = WARP_NUDGE_TIMEOUT_FRAMES;
+    sWarpNudgeChecked = 0;
+    sWarpNudgeArea = area;
+    sWarpNudgeRoom = room;
 }
 
-/* Check whether the given room-relative (tileX, tileY) is walkable
- * on the specified collision layer. 0 from GetCollisionDataAtTilePos
- * means walkable, any other value means blocked. */
-static int Port_DebugAction_TileIsWalkable(int tileX, int tileY, unsigned char layer) {
-    if (tileX < 0 || tileX > 0x3f || tileY < 0 || tileY > 0x3f)
+/* Walkable (collision 0) on `layer`, inside the room. With `plain`, also no
+ * act-tile effect at all; without, only no tile that moves Link on by
+ * itself (pits, holes, deep water, swamp, stairs/ladders). */
+static int Port_DebugAction_TileIsSafe(int tileX, int tileY, unsigned char layer, int plain) {
+    if (tileX < 0 || tileY < 0 || tileX >= gRoomControls.width / 16 || tileY >= gRoomControls.height / 16 ||
+        tileX > 0x3f || tileY > 0x3f)
         return 0;
     u32 tilePos = ((u32)tileX & 0x3f) | (((u32)tileY & 0x3f) << 6);
-    return GetCollisionDataAtTilePos(tilePos, layer) == 0;
+    if (GetCollisionDataAtTilePos(tilePos, layer) != 0)
+        return 0;
+    const u8 act = (layer == 2 ? gMapTop.actTiles : gMapBottom.actTiles)[tilePos];
+    if (plain)
+        return act == 0;
+    switch (act) {
+        case ACT_TILE_13: /* pit */
+        case ACT_TILE_16: /* water */
+        case ACT_TILE_17: /* deep water */
+        case ACT_TILE_19: /* swamp */
+        case ACT_TILE_25: /* hole */
+        case ACT_TILE_63: /* stairs */
+        case ACT_TILE_83: /* ladder */
+        case ACT_TILE_240: /* hole */
+        case ACT_TILE_241: /* ladder transition */
+            return 0;
+        default:
+            return 1;
+    }
 }
 
 /* Spiral outward from (tileX, tileY) up to maxRadius. Writes the first
- * walkable tile coords into the out-params and returns 1; returns 0
- * if no walkable tile is found within the radius. */
-static int Port_DebugAction_FindWalkable(int tileX, int tileY, unsigned char layer, int maxRadius, int* outX,
-                                         int* outY) {
+ * safe tile coords into the out-params and returns 1; returns 0 if none
+ * is found within the radius. */
+static int Port_DebugAction_FindSafe(int tileX, int tileY, unsigned char layer, int plain, int maxRadius,
+                                     int* outX, int* outY) {
     /* Box-spiral: for each ring radius r, walk the perimeter. */
     for (int r = 0; r <= maxRadius; ++r) {
         for (int dy = -r; dy <= r; ++dy) {
@@ -481,11 +525,9 @@ static int Port_DebugAction_FindWalkable(int tileX, int tileY, unsigned char lay
                 if (r > 0 && dx != -r && dx != r && dy != -r && dy != r)
                     continue;
                 int tx = tileX + dx, ty = tileY + dy;
-                if (Port_DebugAction_TileIsWalkable(tx, ty, layer)) {
-                    if (outX)
-                        *outX = tx;
-                    if (outY)
-                        *outY = ty;
+                if (Port_DebugAction_TileIsSafe(tx, ty, layer, plain)) {
+                    *outX = tx;
+                    *outY = ty;
                     return 1;
                 }
             }
@@ -497,31 +539,40 @@ static int Port_DebugAction_FindWalkable(int tileX, int tileY, unsigned char lay
 void Port_DebugAction_WarpTick(void) {
     if (sWarpNudgePending == 0)
         return;
-    if (--sWarpNudgePending != 0)
-        return;
+    --sWarpNudgePending;
 
-    /* Only nudge when we're back in gameplay and Link is alive. */
-    if (gMain.task != TASK_GAME)
+    /* Wait for the destination room to be loaded, Link alive. CHANGEROOM
+     * (the fade-in) already runs player updates, so a pit under the drop
+     * point would start the fall there: check on its first frame. Some rooms
+     * only finish their tile setup on the first UPDATE frame, so check once
+     * more there before disarming. */
+    if (gMain.task != TASK_GAME ||
+        (gMain.substate != GAMEMAIN_CHANGEROOM && gMain.substate != GAMEMAIN_UPDATE) ||
+        gRoomControls.area != sWarpNudgeArea || gRoomControls.room != sWarpNudgeRoom)
         return;
     if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE)
         return;
+    if (gMain.substate == GAMEMAIN_UPDATE)
+        sWarpNudgePending = 0;
+    else if (sWarpNudgeChecked)
+        return;
+    sWarpNudgeChecked = 1;
 
-    /* Sample Link's current tile collision. If walkable, nothing to do. */
     u32 lx = gPlayerEntity.base.x.HALF.HI;
     u32 ly = gPlayerEntity.base.y.HALF.HI;
     unsigned char layer = gPlayerEntity.base.collisionLayer;
-    u32 linkTile = TILE(lx, ly);
-    if (GetCollisionDataAtTilePos(linkTile, layer) == 0) {
-        return; /* already on walkable ground */
-    }
-
-    /* Walk the spiral starting from Link's tile. */
     int tileX = ((int)lx - (int)gRoomControls.origin_x) >> 4;
     int tileY = ((int)ly - (int)gRoomControls.origin_y) >> 4;
+    if (Port_DebugAction_TileIsSafe(tileX, tileY, layer, 1))
+        return; /* already on plain floor */
+
+    /* Prefer plain floor; settle for any walkable tile if the area around
+     * the drop point has none (all shallows, ice, ...). */
     int foundX = 0, foundY = 0;
-    if (!Port_DebugAction_FindWalkable(tileX, tileY, layer, WARP_NUDGE_MAX_RADIUS, &foundX, &foundY)) {
+    if (!Port_DebugAction_FindSafe(tileX, tileY, layer, 1, WARP_NUDGE_MAX_RADIUS, &foundX, &foundY) &&
+        !Port_DebugAction_FindSafe(tileX, tileY, layer, 0, WARP_NUDGE_MAX_RADIUS, &foundX, &foundY)) {
         fprintf(stderr,
-                "[warp-nudge] no walkable tile within radius %d of Link "
+                "[warp-nudge] no safe tile within radius %d of Link "
                 "(tile %d,%d layer %u) — leaving in place\n",
                 WARP_NUDGE_MAX_RADIUS, tileX, tileY, (unsigned)layer);
         return;
@@ -531,9 +582,11 @@ void Port_DebugAction_WarpTick(void) {
     u16 newX = (u16)(gRoomControls.origin_x + (foundX << 4) + 8);
     u16 newY = (u16)(gRoomControls.origin_y + (foundY << 4) + 8);
     fprintf(stderr,
-            "[warp-nudge] Link tile (%d,%d) blocked, snapped to (%d,%d) "
+            "[warp-nudge] Link tile (%d,%d) layer %u unsafe (act %02x), snapped to (%d,%d) "
             "=> world (%u,%u)\n",
-            tileX, tileY, foundX, foundY, (unsigned)newX, (unsigned)newY);
+            tileX, tileY, (unsigned)layer,
+            (layer == 2 ? gMapTop.actTiles : gMapBottom.actTiles)[((tileY & 63) << 6) | (tileX & 63)], foundX, foundY,
+            (unsigned)newX, (unsigned)newY);
     gPlayerEntity.base.x.HALF.HI = newX;
     gPlayerEntity.base.y.HALF.HI = newY;
 }
@@ -1399,6 +1452,11 @@ int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char room, unsig
         return 0;
     }
     if (table[room].pixel_width == 0) {
+        return 0;
+    }
+    /* Hyrule Town room 1 is the festival-town slot (no map of its own; the
+     * game only reaches it through the prologue redirect): not a warp target. */
+    if (area == AREA_HYRULE_TOWN && room == 1) {
         return 0;
     }
     if (w) {

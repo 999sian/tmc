@@ -93,6 +93,62 @@ static void DrawRibbonDisplayTab(void) {
             "working. TPS turns red when the game runs off-speed "
             "(fast-forward, or the machine can't keep up).");
 
+        /* Experimental 3D room view (port_voxel.cpp; SDL_GPU/Vulkan only). */
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("3D view (experimental)");
+        ImGui::TableSetColumnIndex(1);
+        {
+            bool vv = Port_Config_GetVoxelView();
+            if (ImGui::Checkbox("##voxel_view", &vv)) {
+                Port_Config_SetVoxelView(vv);
+            }
+        }
+        RandoUi_HelpTooltip(
+            "Draws rooms in 3D: the ground layer as a floor, the overhead layer "
+            "one tile up, characters as standing sprites. Menus, cutscenes and "
+            "the title screen stay 2D. Needs the GPU (Vulkan) renderer.");
+
+        /* Phase-3 shape editor: fix what the height heuristic misreads, per
+         * area, for the tile Link is facing. Saved to voxel_shapes.json. */
+        const int voxArea = Port_Config_GetVoxelView() ? Port_Voxel_CurrentArea() : -1;
+        if (voxArea >= 0) {
+            StepperRow("3D camera angle", "voxpitch",
+                       [](char* b, size_t n) -> const char* {
+                           std::snprintf(b, n, "%d deg", Port_Config_GetVoxelPitch());
+                           return b;
+                       },
+                       Port_Config_CycleVoxelPitch);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("3D wall height");
+            ImGui::TableSetColumnIndex(1);
+            {
+                const int wt = Port_Voxel_AreaWallTiles(voxArea);
+                if (ImGui::Button("<##voxwall")) Port_Voxel_SetAreaWallTiles(voxArea, wt - 1);
+                ImGui::SameLine(); ImGui::Text("%d tiles (area 0x%02X)", wt, voxArea); ImGui::SameLine();
+                if (ImGui::Button(">##voxwall")) Port_Voxel_SetAreaWallTiles(voxArea, wt + 1);
+            }
+            RandoUi_HelpTooltip("How many tile rows of each wall/cliff stand up vertically in this area.");
+
+            const PortVoxelTileAhead ta = Port_Voxel_TileAhead();
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("3D tile ahead");
+            ImGui::TableSetColumnIndex(1);
+            if (ta.valid) {
+                ImGui::Text("type 0x%03X", ta.tileType);
+                static const char* kShapeNames[] = { "Auto", "Floor", "Block", "Prop" };
+                for (int s = 0; s < 4; ++s) {
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton(kShapeNames[s], ta.shape == s))
+                        Port_Voxel_SetTileShape(ta.area, ta.tileType, s);
+                }
+            } else {
+                ImGui::TextDisabled("(none)");
+            }
+            RandoUi_HelpTooltip("Shape of the tile Link is facing, for every tile of that type in this area. "
+                                "Auto = guess from collision; Floor = always flat; Block = always a wall; "
+                                "Prop = standing cutout of the outlined object.");
+        }
+
         StepperRow("Internal scale", "iscale",
                    [](char* b, size_t n) -> const char* {
                        std::snprintf(b, n, "%ux", (unsigned)Port_Config_InternalScale());

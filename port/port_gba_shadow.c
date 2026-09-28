@@ -77,7 +77,7 @@ typedef struct {
 /* a pointer and must move to the rejected list.                             */
 /* ------------------------------------------------------------------------- */
 PORT_STATIC_ASSERT(sizeof(gMessage) == 0x20, "gMessage layout differs from retail");
-/* flags sits at retail 0x25C (SaveFile.filler25B); pinned here so any change to
+/* flags sits at retail 0x25C (KinstoneSave.filler147); pinned here so any change to
  * the struct also updates the shadow expectations below. */
 PORT_STATIC_ASSERT(offsetof(SaveFile, flags) == 0x25C, "SaveFile.flags moved; update shadow self-test");
 PORT_STATIC_ASSERT(sizeof(gSave) == 0x500, "gSave layout differs from retail");

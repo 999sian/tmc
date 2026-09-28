@@ -629,7 +629,10 @@ jobs:
               fi
               sleep 1
             done
-            kill "$pid" 2>/dev/null || true
+            # SIGKILL: SDL turns SIGTERM into SDL_EVENT_QUIT, which in-game
+            # opens the save-before-quit modal instead of exiting, so a
+            # plain kill leaves `wait` blocked until the job times out.
+            kill -KILL "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
             if [ "$ok" != 1 ]; then
               echo "FAIL: $rom never reached AgbMain. Log tail:"

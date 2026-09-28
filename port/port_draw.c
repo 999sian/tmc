@@ -26,6 +26,7 @@
 
 #include "port_widescreen.h"
 #include "port_rom.h"
+#include "port_voxel.h"
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -48,6 +49,16 @@ static const u8* sShoesOverlayPtrs[32];
 static int sShoesOverlayTableLoaded;
 static void LoadShoesOverlayTableFromRom(void);
 extern u32 gFrameObjLists[50016];
+
+/* Per-OAM-slot world anchors for the voxel view (port_voxel.h). sVoxelCtx is
+ * the anchor applied to every piece RenderSpritePieces emits; it is HUD unless
+ * an entity (or its deferred shadow) is being drawn. */
+PortVoxelOamTag gPortVoxelOamTagsBuild[128];
+PortVoxelOamTag gPortVoxelOamTags[128];
+void Port_Voxel_LatchOamTags(void) {
+    memcpy(gPortVoxelOamTags, gPortVoxelOamTagsBuild, sizeof(gPortVoxelOamTags));
+}
+static PortVoxelOamTag sVoxelCtx;
 
 static inline u32 ReadU32Unaligned(const void* p) {
     u32 v;
@@ -492,6 +503,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
          * clip in ViruaPPU (see RenderSpritePieces top + port_gba_mem). */
         if (sSwampClipActive)
             virtuappu_mode1_obj_clip_mark[updated & 0x7F] = 1;
+        gPortVoxelOamTagsBuild[updated & 0x7F] = sVoxelCtx;
 
         updated++;
     }
@@ -889,6 +901,9 @@ static void ProcessEntityForDraw(Entity* entity) {
     u16 extra;
 
     ResolveEntitySpriteParams(entity, &x, &y, &flags, &extra);
+    sVoxelCtx.kind = PORT_VOXEL_OAM_ENTITY;
+    sVoxelCtx.layer = entity->collisionLayer;
+    sVoxelCtx.groundY = (s16)(y - entity->z.HALF.HI);
 
     /* Check shadow flag (bit 3 of spritePriority byte, offset 0x29) */
     s8 prioRaw = *(s8*)&entity->spritePriority;
@@ -989,6 +1004,7 @@ static void ProcessDrawList(EntityDrawList* list) {
         if (gOAMControls.updated >= 0x80)
             return;
         ProcessEntityForDraw(list->entries[i]);
+        sVoxelCtx.kind = PORT_VOXEL_OAM_HUD;
     }
 }
 
@@ -1101,7 +1117,6 @@ static void ProcessDeferredList(void) {
         return;
     if (!sShadowTableLoaded)
         LoadShadowTableFromRom();
-
     for (u32 i = 0; i < sDeferredList.count; i++) {
         if (gOAMControls.updated >= 0x80)
             return;
@@ -1148,7 +1163,9 @@ void ram_DrawEntities(void) {
         ProcessDrawList(list);
 
         /* Render deferred shadow/underlay sprites */
+        sVoxelCtx.kind = PORT_VOXEL_OAM_DECAL;
         ProcessDeferredList();
+        sVoxelCtx.kind = PORT_VOXEL_OAM_HUD;
 
         /* NOTE: do NOT clear list->count here. The list is cleared at
          * the start of ram_UpdateEntities (mode=0) so registrations

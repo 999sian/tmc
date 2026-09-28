@@ -65,7 +65,6 @@ TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./dist/USA/tmc_pc --n
 - Runtime settings go through `port/port_runtime_config.*` and persist to `config.json`.
 - Logging is mostly `fprintf(stderr, "[tag] ...")`; keep frame-spam conditional or throttled.
 - Rendering changes must respect pitch, visible width, widescreen toggles, SDL state churn, and zero-allocation frame loops.
-- For VirtuaPPU changes, update both the submodule working tree and the corresponding `port/patches/*.patch` entry.
 
 ## Important Files
 - `src/main.c` — `AgbMain()` and core task loop.
@@ -78,7 +77,7 @@ TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./dist/USA/tmc_pc --n
 - `port/port_asset_loader.cpp` — runtime asset lookup and fallback behavior.
 - `port/port_audio.c`, `src/sound.c` — PC audio backend and original sound engine integration.
 - `port/port_imgui_menu.cpp`, `port/port_debug_menu.cpp` — F8 menus and debug tooling.
-- `xmake.lua` — primary build graph, options, packages, submodule patch rules.
+- `xmake.lua` — primary build graph, options, packages.
 - `build.py` — user-facing build orchestrator.
 - `README.md`, `INSTALL.md`, `CHANGELOG.md` — user setup, build notes, release context.
 
@@ -98,4 +97,4 @@ TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./dist/USA/tmc_pc --n
 - Renderer/PPU changes should test the relevant backend and scale path: software SDL_Renderer, SDL_GPU when enabled, nearest/internal-scale/xBRZ as applicable.
 - Manual QA tools: F8 debug menu, F9 bug report capture, F5/F6 quicksave/load, F7 TTS toggle, F12 upscaler cycle.
 - CI builds a multi-platform matrix via `.github/workflows/_build.yaml`; Linux release checks SDL3 audio backends (`alsa`, `pulseaudio`, `pipewire`).
-- `tools/ppu_bench.c` is a manual VirtuaPPU benchmark/parity helper, not a CI test.
+- `tools/ppu_bench.c` is a manual PPU (`port/ppu/`) benchmark/parity helper, not a CI test.

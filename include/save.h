@@ -7,6 +7,13 @@
 
 #define FILENAME_LENGTH 6
 
+#ifdef PC_PORT
+/* Native randomizer saves need their matching .randomizer sidecar. Store this
+ * in retail-unused EEPROM padding so a missing sidecar cannot open as vanilla. */
+#define PC_RANDO_SAVE_MARKER "PICORI-RANDO"
+#define PC_RANDO_SAVE_BINDING_OFFSET sizeof(PC_RANDO_SAVE_MARKER)
+#endif
+
 #ifndef SAVE_HEADER_DEFINED
 #define SAVE_HEADER_DEFINED
 typedef struct {
@@ -65,6 +72,7 @@ typedef struct {
                             * @see CheckKinstoneFused */
     u8 fusionUnmarked[13]; /**< bitfield for disabled fusion map markers
                             * @see CheckFusionMapMarkerDisabled */
+    u8 filler147;          /**< agbcc rounds struct sizes up to 4 bytes; explicit so PC matches retail */
 } KinstoneSave;
 
 /**
@@ -96,10 +104,9 @@ typedef struct {
     /*0x088*/ PlayerRoomStatus saved_status; /**< Player room status. */
     /*0x0A8*/ Stats stats;                   /**< Player stats. */
     /*0x0CC*/ u8 fillerCC[2];                /**< unused filler */
-    /*0x0D0*/ u8 figurines[36];              /**< figurine bitset */
+    /*0x0CE*/ u8 figurines[36];              /**< figurine bitset */
     /*0x0F2*/ u8 inventory[34];              /**< 2 bit per item @see Item */
     /*0x114*/ KinstoneSave kinstones;        /**< save data for kinstones @see KinstoneSave */
-    /*0x25B*/ u8 filler25B;                  /**< unused filler (agbcc pads here; explicit so PC matches retail) */
     /*0x25C*/ u8 flags[0x200];               /**< flags */
     /*0x45C*/ u8 dungeonKeys[0x10];          /**< indexed by dungeon id, keys per dungeon */
     /*0x46C*/ u8 dungeonItems[0x10];         /**< dungeon items 4: compass, 2: big key, 1: small key */
@@ -116,7 +123,12 @@ typedef struct {
 } SaveFile;
 
 /* Retail EEPROM layout; same on GBA and PC (static_assert is a no-op on agbcc). */
-static_assert(sizeof(KinstoneSave) == 0x147, "KinstoneSave size incorrect");
+static_assert(sizeof(KinstoneSave) == 0x148, "KinstoneSave size incorrect");
+static_assert(offsetof(SaveFile, saved_status) == 0x88, "SaveFile saved_status offset incorrect");
+static_assert(offsetof(SaveFile, stats) == 0xA8, "SaveFile stats offset incorrect");
+static_assert(offsetof(SaveFile, figurines) == 0xCE, "SaveFile figurines offset incorrect");
+static_assert(offsetof(SaveFile, inventory) == 0xF2, "SaveFile inventory offset incorrect");
+static_assert(offsetof(SaveFile, kinstones) == 0x114, "SaveFile kinstones offset incorrect");
 static_assert(offsetof(SaveFile, flags) == 0x25C, "SaveFile flags offset incorrect");
 static_assert(offsetof(SaveFile, dungeonKeys) == 0x45C, "SaveFile dungeonKeys offset incorrect");
 static_assert(offsetof(SaveFile, dungeonItems) == 0x46C, "SaveFile dungeonItems offset incorrect");

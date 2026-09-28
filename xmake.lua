@@ -86,6 +86,19 @@ option("ra")
     set_description("Compile RetroAchievements support (rcheevos + libcurl; default ON)")
 option_end()
 
+-- Headless auto-repro / capture harnesses (port/port_repro_*.c, driven by
+-- TMC_REPRO_* / TMC_PERFCAP / TMC_ROOMCAP env vars). "default" follows the
+-- build mode (on for debug, off for release); --repro_harness=y/n forces it.
+-- Off compiles the entry points to empty inlines via port/port_repro.h.
+-- A string default is deliberate: an option without one is probed and stored
+-- as false, hiding the mode fallback. Not "auto": xmake's config.get maps
+-- that string to nil and `xmake f --repro_harness=auto` then errors.
+option("repro_harness")
+    set_default("default")
+    set_showmenu(true)
+    set_description("Compile the TMC_REPRO_* test harnesses (default = on in debug, off in release)", "default", "y", "n")
+option_end()
+
 -- Framebuffer capacity. At >240, the WIP runtime option reveals room-backed
 -- tiles at a width fitted to the window aspect and capped by the room.
 -- Fixed canvases and the digging-cave iris use the native 240px view.
@@ -739,14 +752,22 @@ target("tmc_pc")
     -- Minish Cap Reborn parity toggles, ported from Admentus64/The-Minish-Cap-
     -- Reborn (GPL-3.0); GPL-3.0, see THIRD-PARTY-LICENSES.md.
     add_files("port/port_reborn.cpp")
-    -- Env-gated auto-repro / capture harnesses (no-op when off).
-    add_files("port/port_repro_perfcap.c")
-    add_files("port/port_repro_rando.c")
-    add_files("port/port_repro_a11y.c")
-    add_files("port/port_repro_roomcap.c")  -- generic in-game room capture (TMC_ROOMCAP)
-    add_files("port/port_repro_roll_macro.c") -- roll-attack macro e2e test (TMC_REPRO_ROLL_MACRO)
-    add_files("port/port_repro_npc_talk.c") -- NPC-talk e2e test (TMC_REPRO_NPC_TALK)
-    add_files("port/port_repro_itemget.c") -- item-get perf repro (TMC_REPRO_ITEMGET)
+    -- Env-gated auto-repro / capture harnesses (no-op when env unset;
+    -- compiled out entirely with --repro_harness=n, see option above).
+    local repro_harness = get_config("repro_harness")
+    if repro_harness == "default" then
+        repro_harness = is_mode("debug")
+    end
+    if repro_harness then
+        add_defines("TMC_REPRO_HARNESS")
+        add_files("port/port_repro_perfcap.c")
+        add_files("port/port_repro_rando.c")
+        add_files("port/port_repro_a11y.c")
+        add_files("port/port_repro_roomcap.c")  -- generic in-game room capture (TMC_ROOMCAP)
+        add_files("port/port_repro_roll_macro.c") -- roll-attack macro e2e test (TMC_REPRO_ROLL_MACRO)
+        add_files("port/port_repro_npc_talk.c") -- NPC-talk e2e test (TMC_REPRO_NPC_TALK)
+        add_files("port/port_repro_itemget.c") -- item-get perf repro (TMC_REPRO_ITEMGET)
+    end
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.

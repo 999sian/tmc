@@ -892,7 +892,7 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
         // UpdateScrollVram();
     }
 
-    // Load custom entities from Minish Maker project files if they exist
+    // Load custom entities from project files if they exist
     
     // Clear old data first
 

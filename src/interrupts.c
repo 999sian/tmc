@@ -102,6 +102,15 @@ void UpdateDisplayControls(void) {
         gOAMControls.field_0x0 = 0;
 
         DmaCopy32(3, &gOAMControls.oam, OAM, OAM_SIZE);
+#ifdef PC_PORT
+        /* Voxel view: latch the per-slot world anchors with the OAM they
+         * describe, so a render between game frames never pairs new tags
+         * with last frame's sprites (sprites jumping into the HUD layer). */
+        {
+            extern void Port_Voxel_LatchOamTags(void);
+            Port_Voxel_LatchOamTags();
+        }
+#endif
 
     }
     sub_08016CA8(&gScreen.bg0);

@@ -12,6 +12,9 @@
 #include "sound.h"
 #include "subtask.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_region_data.h"
+#endif
 
 void sub_08055994(void);
 
@@ -54,7 +57,12 @@ void WorldEvent_2_2(void) {
 
 void sub_08055994(void) {
     u32 layer;
+#if defined(PC_PORT) && defined(MULTI_REGION)
+    const TileEntity* list = (const TileEntity*)Port_ResolveRegionData(gUnk_080FEAC8);
+    TileEntity* ptr = (TileEntity*)(list ? &list[gMenu.field_0x4] : &gUnk_080FEAC8[gMenu.field_0x4]);
+#else
     TileEntity* ptr = &gUnk_080FEAC8[gMenu.field_0x4];
+#endif
     if ((ptr->_6 & 1) != 0) {
         layer = LAYER_TOP;
     } else {

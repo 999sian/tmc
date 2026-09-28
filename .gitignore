@@ -29,12 +29,11 @@ docs/doxygen/xml/
 tools/agbcc
 tools/binutils
 
-# scripts
-*.py
-!tools/persistence_regression_test.py
-!tools/extract_include_enum.py
-!tools/generate_sounds_embed.py
-!tools/region_regression_test.py
+# scripts: only root-level scratch python is ignored; tools/ and scripts/ are tracked
+/*.py
+!/build.py
+!/doxygen_config.py
+!/progress.py
 *.pl
 
 # graphics
@@ -100,9 +99,7 @@ _Deparsed_XSubs.pm
 __pycache__
 Info.plist
 ctx.c
-!doxygen_config.py
 
-!build.py
 .xmake
 .vscode/
 rom_data/
@@ -162,18 +159,3 @@ android/local.properties
 android/.gradle/
 android/app/build/
 
-# Portable regression runners
-!tools/allocation_regression_test.py
-!tools/sprite_regression_test.py
-!tools/tests/regional_entity_lists.py
-!tools/fuser_regression_test.py
-!tools/widescreen_regression_test.py
-!tools/widescreen_engine_regression_test.py
-
-!tools/minish_foliage_regression_test.py
-!tools/widescreen_scroll_regression_test.py
-
-!tools/door_visibility_regression_test.py
-
-!tools/enemy_home_regression_test.py
-!tools/npc_context_regression_test.py

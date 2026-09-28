@@ -25,7 +25,11 @@ int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room,
                                        unsigned short* x, unsigned short* y,
                                        unsigned char* layer);
 
-void Port_DebugAction_ArmWarpNudge(void);
+/* Rewrites a festival-room target (Festival Town, Hyrule Town room 1) to the
+ * town proper, where the game's own prologue redirect decides. */
+void Port_DebugAction_WarpEntry(unsigned char* area, unsigned char* room, unsigned short* x);
+
+void Port_DebugAction_ArmWarpNudge(unsigned char area, unsigned char room);
 void Port_DebugAction_WarpTick(void);
 
 /* Free-coordinate teleport within the current room. TeleportXY drops Link at
