@@ -164,6 +164,11 @@ bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
 bool sRollAttackMacroEnabled = true;
 bool sFullscreen = false;
 bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
+/* Persisted equivalent of TMC_AUTOPLAY: skip the prelaunch Play screen (and,
+ * via the same env var, the update-check dialog) on every launch. --skip-launcher
+ * and this config both work by setting TMC_AUTOPLAY=1 in-process (port_main.c) —
+ * see docs/env-vars.md. */
+bool sSkipLauncher = false;
 float sAnalogDeadzone = 0.30f;     /* 360° stick deadzone magnitude [0..0.95] */
 std::string sShaderPreset;         /* path to active .glslp, empty = none */
 unsigned sRebornFeatures = 0;      /* bitmask of enabled Reborn features */
@@ -296,6 +301,7 @@ const BoolCfg kBoolCfg[] = {
     { "roll_attack_macro", &sRollAttackMacroEnabled, true },
     { "fullscreen", &sFullscreen, false },
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
+    { "skip_launcher", &sSkipLauncher, false },
     { "rando_enabled", &sRandoEnabled, false },
     { "rando_glitchless", &sRandoGlitchless, true },
     { "rando_obscure", &sRandoObscure, false },
@@ -1947,6 +1953,9 @@ extern "C" void Port_Config_SetFullscreenHideCursor(bool on) {
     sFullscreenHideCursor = on;
     sConfigJson["fullscreen_hide_cursor"] = on;
     SaveConfig();
+}
+extern "C" bool Port_Config_GetSkipLauncher(void) {
+    return sSkipLauncher;
 }
 extern "C" float Port_Config_GetAnalogDeadzone(void) {
     return sAnalogDeadzone;
