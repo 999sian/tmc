@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/picori-logo.png" alt="Project Picori" width="240">
-</p>
-
 # Project Picori — Minish Cap PC Port
 
 A native PC port of *The Legend of Zelda: The Minish Cap* (GBA, 2004) built on

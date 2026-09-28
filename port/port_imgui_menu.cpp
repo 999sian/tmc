@@ -49,7 +49,6 @@ extern "C" void Port_ApplyLanguage(void);
 
 #include "port_widescreen.h"
 #include "port_gpu_renderer.h"
-#include "port_prelaunch_logo.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h" /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"         /* Port_TTS_* — accessibility tab + focus reader */
@@ -4705,20 +4704,11 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
     if (!sImGuiInited)
         return false;
 
-    /* Lazy-load the logo on the first frame. Safe on both backends —
-     * the loader picks the right path based on which pointer is
-     * non-null. */
 #ifdef TMC_GPU_RENDERER
     const bool gpuBackend = (sRenderer == nullptr);
-    {
-        SDL_GPUDevice* dev = gpuBackend ? Port_GPU_GetDevice() : nullptr;
-        Port_PrelaunchLogo_EnsureLoaded(sRenderer, dev);
-    }
     if (gpuBackend) {
         ImGui_ImplSDLGPU3_NewFrame();
     } else
-#else
-    Port_PrelaunchLogo_EnsureLoaded(sRenderer, nullptr);
 #endif
     {
         ImGui_ImplSDLRenderer3_NewFrame();
@@ -4743,17 +4733,6 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
         const float win_w = ImGui::GetWindowSize().x;
         const ImVec4 accent(0.40f, 0.72f, 0.46f, 1.00f);
         const ImVec4 subtxt(0.70f, 0.78f, 0.70f, 1.00f);
-
-        /* Logo centred at top, sized to ~160px square. Falls through
-         * if the loader couldn't get a texture (decode error etc) —
-         * the rest of the card still draws fine. */
-        const ImTextureID logo_tex = Port_PrelaunchLogo_GetTexId();
-        if (logo_tex != 0) {
-            const float DISPLAY = 160.0f;
-            ImGui::SetCursorPosX((win_w - DISPLAY) * 0.5f);
-            ImGui::Image(logo_tex, ImVec2(DISPLAY, DISPLAY));
-            ImGui::Dummy(ImVec2(0, 8));
-        }
 
         ImGui::PushStyleColor(ImGuiCol_Text, accent);
         ImGui::SetWindowFontScale(2.4f);

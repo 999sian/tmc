@@ -697,17 +697,9 @@ target("tmc_pc")
     add_files("port/port_debug_menu.cpp")
     add_files("port/port_imgui_menu.cpp")
     add_files("port/port_level_editor.cpp")
-    add_files("port/port_prelaunch_logo.cpp")
     add_files("port/port_tts.cpp")
     add_files("port/port_a11y_cues.c")     -- accessibility audio cues (surroundings scan, F10)
     add_files("port/port_a11y_audio.c")    -- spatialized tone cues (audio-thread mixer)
-    -- Embed docs/picori-logo.png into the binary so the prelaunch
-    -- screen always has the logo regardless of cwd / install layout.
-    -- xmake's utils.bin2c rule writes a "0xNN, 0xNN, ..." byte sequence
-    -- to a header we include inside an array initializer
-    -- (see port_prelaunch_logo.cpp).
-    add_rules("utils.bin2c", {extensions = {".png"}})
-    add_files("docs/picori-logo.png", {rule = "utils.bin2c", nozeroend = true})
     add_files("port/port_debug_actions.c")
     add_files("port/port_flag_names.cpp")
     add_files("port/port_debug_entities.c")
