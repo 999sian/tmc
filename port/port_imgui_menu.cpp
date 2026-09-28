@@ -1680,6 +1680,21 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
         ImGui::Dummy(ImVec2(0, 14));
         (void)DrawRegionLanguageControls(true);
 
+        /* Persisted opt-out for this screen itself: writes config.json's
+         * "skip_launcher" immediately on toggle (same effect as
+         * --skip-launcher / TMC_AUTOPLAY=1, applied on the *next* run —
+         * see docs/env-vars.md). */
+        {
+            ImGui::Dummy(ImVec2(0, 10));
+            ImGui::SeparatorText("Additional Settings");
+            bool skipLauncher = Port_Config_GetSkipLauncher();
+            ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+            if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
+                Port_Config_SetSkipLauncher(skipLauncher);
+            }
+            ImGui::PopStyleColor();
+        }
+
         ImGui::Dummy(ImVec2(0, 22));
 
         /* Big centred action button: Play when a ROM is loaded, Select

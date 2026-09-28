@@ -1957,6 +1957,11 @@ extern "C" void Port_Config_SetFullscreenHideCursor(bool on) {
 extern "C" bool Port_Config_GetSkipLauncher(void) {
     return sSkipLauncher;
 }
+extern "C" void Port_Config_SetSkipLauncher(bool on) {
+    sSkipLauncher = on;
+    sConfigJson["skip_launcher"] = on;
+    SaveConfig();
+}
 extern "C" float Port_Config_GetAnalogDeadzone(void) {
     return sAnalogDeadzone;
 }

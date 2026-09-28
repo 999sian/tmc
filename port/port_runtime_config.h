@@ -106,6 +106,7 @@ void Port_Config_SetConsoleParity(bool on);
  * (port_main.c), so they also skip the update-check dialog like the env
  * var already does — see docs/env-vars.md. Default OFF. */
 bool Port_Config_GetSkipLauncher(void);
+void Port_Config_SetSkipLauncher(bool on);
 void Port_Config_ToggleConsoleParity(void);
 
 /* Aspect-ratio mode for the on-screen viewport. The game frame is always
