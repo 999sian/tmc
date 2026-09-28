@@ -709,6 +709,14 @@ static void DrawRibbon(void) {
         }
         /* Footer with the mode toggle + hotkey hint. */
         ImGui::Separator();
+        /* Same persisted setting as the prelaunch card's "Additional
+         * Settings" checkbox — exposed here too since this menu is the
+         * only way to reach it once skip_launcher has already skipped
+         * the prelaunch screen once. */
+        bool skipLauncher = Port_Config_GetSkipLauncher();
+        if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
+            Port_Config_SetSkipLauncher(skipLauncher);
+        }
         bool useRibbon = sRibbonEnabled;
         if (ImGui::Checkbox("Ribbon mode (uncheck for classic menu)", &useRibbon)) {
             sRibbonEnabled = useRibbon;
