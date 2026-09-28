@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.9.4 (2026-09-27)
+## v0.9.5 (2026-09-28)
 
 - Engine and runtime data loader modernization: all ROM symbol tables and
   assets stream dynamically from the base ROM at startup. EU and JP ROMs get
