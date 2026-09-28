@@ -8,8 +8,8 @@
   fixing wrong title-screen colours and crashes on EU.
 - Text-to-speech and the accessibility audio cues (surroundings, footsteps,
   hazards, radar, walls) are off by default for new configs; enable them in
-  F8. The Picori logo is gone from the README, the prelaunch screen, and the
-  Android launcher icon.
+  F8. New pixel-art Ezlo logo in the README, on the prelaunch screen, and as
+  the Android launcher icon.
 
 - Experimental 3D room view (F8 → Display → "3D view", GPU/Vulkan renderer
   only). Walls, cliffs, buildings and tree masses rise from the collision map
