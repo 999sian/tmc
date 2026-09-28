@@ -709,6 +709,14 @@ static void DrawRibbon(void) {
         }
         /* Footer with the mode toggle + hotkey hint. */
         ImGui::Separator();
+        /* Same persisted setting as the prelaunch card's "Additional
+         * Settings" checkbox — exposed here too since this menu is the
+         * only way to reach it once skip_launcher has already skipped
+         * the prelaunch screen once. */
+        bool skipLauncher = Port_Config_GetSkipLauncher();
+        if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
+            Port_Config_SetSkipLauncher(skipLauncher);
+        }
         bool useRibbon = sRibbonEnabled;
         if (ImGui::Checkbox("Ribbon mode (uncheck for classic menu)", &useRibbon)) {
             sRibbonEnabled = useRibbon;
@@ -1424,11 +1432,18 @@ extern "C" bool Port_ImGui_Render(void) {
                 DrawMenuPage(depth);
             }
             /* Classic mode has no ribbon footer, so without this it would be a
-             * one-way trap. Offer an explicit way back to ribbon mode. */
+             * one-way trap. Offer an explicit way back to ribbon mode. Also
+             * the only place classic-mode users can reach settings that live
+             * in the ribbon footer (e.g. skip_launcher), since classic mode
+             * has no other persistent settings surface. */
             ImGui::SetNextWindowBgAlpha(0.85f);
             if (ImGui::Begin("##classic_to_ribbon", nullptr,
                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
                                  ImGuiWindowFlags_NoSavedSettings)) {
+                bool skipLauncher = Port_Config_GetSkipLauncher();
+                if (ImGui::Checkbox("Skip launcher", &skipLauncher)) {
+                    Port_Config_SetSkipLauncher(skipLauncher); /* persist (#146) */
+                }
                 if (ImGui::SmallButton("Switch to ribbon mode")) {
                     sRibbonEnabled = true;
                     Port_Config_SetRibbonEnabled(true); /* persist (#146) */
@@ -1679,6 +1694,21 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
         }
         ImGui::Dummy(ImVec2(0, 14));
         (void)DrawRegionLanguageControls(true);
+
+        /* Persisted opt-out for this screen itself: writes config.json's
+         * "skip_launcher" immediately on toggle (same effect as
+         * --skip-launcher / TMC_AUTOPLAY=1, applied on the *next* run —
+         * see docs/env-vars.md). */
+        {
+            ImGui::Dummy(ImVec2(0, 10));
+            ImGui::SeparatorText("Additional Settings");
+            bool skipLauncher = Port_Config_GetSkipLauncher();
+            ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+            if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
+                Port_Config_SetSkipLauncher(skipLauncher);
+            }
+            ImGui::PopStyleColor();
+        }
 
         ImGui::Dummy(ImVec2(0, 22));
 

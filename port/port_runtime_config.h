@@ -99,6 +99,14 @@ void Port_Config_ToggleWidescreen(void);
  * config.json as "console_parity"; --console-parity forces it on at launch. */
 bool Port_Config_GetConsoleParity(void);
 void Port_Config_SetConsoleParity(bool on);
+
+/* Persisted equivalent of TMC_AUTOPLAY: skip the prelaunch Play screen.
+ * --skip-launcher sets this for the session; config.json's "skip_launcher"
+ * makes it permanent. Both apply by setting TMC_AUTOPLAY=1 in-process
+ * (port_main.c), so they also skip the update-check dialog like the env
+ * var already does — see docs/env-vars.md. Default OFF. */
+bool Port_Config_GetSkipLauncher(void);
+void Port_Config_SetSkipLauncher(bool on);
 void Port_Config_ToggleConsoleParity(void);
 
 /* Aspect-ratio mode for the on-screen viewport. The game frame is always
