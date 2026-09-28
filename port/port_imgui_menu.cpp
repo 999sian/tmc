@@ -1432,11 +1432,18 @@ extern "C" bool Port_ImGui_Render(void) {
                 DrawMenuPage(depth);
             }
             /* Classic mode has no ribbon footer, so without this it would be a
-             * one-way trap. Offer an explicit way back to ribbon mode. */
+             * one-way trap. Offer an explicit way back to ribbon mode. Also
+             * the only place classic-mode users can reach settings that live
+             * in the ribbon footer (e.g. skip_launcher), since classic mode
+             * has no other persistent settings surface. */
             ImGui::SetNextWindowBgAlpha(0.85f);
             if (ImGui::Begin("##classic_to_ribbon", nullptr,
                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
                                  ImGuiWindowFlags_NoSavedSettings)) {
+                bool skipLauncher = Port_Config_GetSkipLauncher();
+                if (ImGui::Checkbox("Skip launcher", &skipLauncher)) {
+                    Port_Config_SetSkipLauncher(skipLauncher); /* persist (#146) */
+                }
                 if (ImGui::SmallButton("Switch to ribbon mode")) {
                     sRibbonEnabled = true;
                     Port_Config_SetRibbonEnabled(true); /* persist (#146) */
