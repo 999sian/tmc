@@ -371,7 +371,14 @@ void sub_0804AFB0(void** properties) {
             val = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
         }
         if (val == NULL) {
-            val = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i) : properties[i];
+            if (IsRoomPropertyListInRom(properties)) {
+                /* A Thumb function address (odd) the table above doesn't know
+                 * is not callable on PC; calling it jumps into ROM bytes. */
+                const u8* raw = (const u8*)properties + i * 4;
+                val = (raw[0] & 1) ? NULL : Port_ReadPackedRomPtr(properties, i);
+            } else {
+                val = properties[i];
+            }
         }
         gRoomVars.properties[i] = val;
 #else

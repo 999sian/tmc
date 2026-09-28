@@ -817,7 +817,8 @@ extern SpritePtr gSpritePtrs[];
 extern u32 gFixedTypeGfxData[];
 extern u16* gMoreSpritePtrs[MORE_SPRITE_PTRS_COUNT];
 extern Frame* gSpriteAnimations_322[SPRITE_ANIM_322_COUNT];
-extern void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset);
+extern void Port_LoadOverlayDataFromConst(const u8* data, u32 size);
+extern u8 gRomOverlaySizeData[240]; /* port_rom_stubs.c, region-located */
 
 /* Area / room data tables (port_linked_stubs.c) */
 
@@ -1609,14 +1610,6 @@ void Port_LoadRom(const char* path) {
     memcpy(gUnk_0810942E, &gRomData[R->text0942E], 160);
     memcpy(gUnk_081094CE, &gRomData[R->text094CE], 1378);
 
-    /* UI data — 8 bytes from ROM 0xC9044 */
-    {
-        extern u8 gUnk_080C9044[];
-        if (gRomSize >= 0xC9044 + 8) {
-            memcpy(gUnk_080C9044, &gRomData[0xC9044], 8);
-        }
-    }
-
     /* UI element definitions (native function pointers) */
     {
         extern void Port_InitUIElementDefinitions(void);
@@ -1668,8 +1661,8 @@ void Port_LoadRom(const char* path) {
     }
     fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries from active ROM).\n");
 
-    /* Load overlay data from ROM */
-    Port_LoadOverlayData(gRomData, gRomSize, 0x0B2BE8);
+    /* Overlay size table (port_rom_stubs.c fills it for the active region) */
+    Port_LoadOverlayDataFromConst(gRomOverlaySizeData, sizeof(gRomOverlaySizeData));
 
     /* gMapData — map data blob. On GBA a ROM label; on PC a pointer into the
      * loaded ROM (no 14 MB copy). The expectedRomSize check above already

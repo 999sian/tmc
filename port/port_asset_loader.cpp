@@ -1390,6 +1390,9 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
 extern "C" u16 gPaletteBuffer[];
 
 extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
+    if (gRomRegion != ROM_REGION_USA) {
+        return FALSE;
+    }
     if (!EnsureAssetGroupCache()) {
         return FALSE;
     }
@@ -1442,6 +1445,11 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
 }
 
 extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
+    /* Extracted asset caches use the build-time baseline. A universal build is
+     * USA-based, so non-USA ROMs must retain their runtime-resolved ROM tables. */
+    if (gRomRegion != ROM_REGION_USA) {
+        return FALSE;
+    }
     if (!EnsureAssetGroupCache()) {
         return FALSE;
     }

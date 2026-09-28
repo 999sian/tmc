@@ -553,12 +553,7 @@ void LoadGfxGroup(u32 group) {
 
         if (loadGfx) {
             gfxOffset = gi & 0xFFFFFF;
-#ifdef PC_PORT
-            extern u8* gRomData;
-            src = (gRomData != NULL) ? &gRomData[gfxOffset] : &gGlobalGfxAndPalettes[gfxOffset];
-#else
             src = &gGlobalGfxAndPalettes[gfxOffset];
-#endif
             dest = ROM_U32(gfxItem->dest);
             size = (int)ROM_U32(gfxItem->unk8);
             dmaCtrl = 0x80000000;

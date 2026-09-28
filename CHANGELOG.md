@@ -3,7 +3,9 @@
 ## v0.9.4 (2026-09-27)
 
 - Engine and runtime data loader modernization: all ROM symbol tables and
-  assets stream dynamically from the base ROM at startup.
+  assets stream dynamically from the base ROM at startup. EU and JP ROMs get
+  each table located in their own layout (`tools/generate_rom_stubs.py`),
+  fixing wrong title-screen colours and crashes on EU.
 
 - Experimental 3D room view (F8 → Display → "3D view", GPU/Vulkan renderer
   only). Walls, cliffs, buildings and tree masses rise from the collision map

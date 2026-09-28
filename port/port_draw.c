@@ -75,16 +75,7 @@ _Static_assert(offsetof(Entity, spriteOrientation) == offsetof(Entity, spriteSet
 static u8 sSizeTable[240];
 static int sSizeTableLoaded = 0;
 
-/* Called from port_rom.c after ROM is loaded */
-void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset) {
-    /* Size table at region-specific ROM offset, 240 bytes */
-    if (romSize > overlayOffset + 240) {
-        memcpy(sSizeTable, &romData[overlayOffset], 240);
-        sSizeTableLoaded = 1;
-    }
-}
-
-/* Called from port_rom.c — load overlay data from compile-time const blob */
+/* Called from port_rom.c with the region-located ROM stub buffer */
 void Port_LoadOverlayDataFromConst(const u8* data, u32 size) {
     if (data && size >= 240) {
         memcpy(sSizeTable, data, 240);

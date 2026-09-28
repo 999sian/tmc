@@ -21,7 +21,6 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include "hitbox.h"
 #include "ui.h"
 #include "subtask.h"
 #include "beanstalkSubtask.h"
@@ -247,7 +246,6 @@ void InitializePlayer(void) {
     UpdateSpriteForCollisionLayer(pl);
     AppendEntityToList(pl, 1);
     RegisterPlayerHitbox();
-    pl->hitbox = (Hitbox*)&gPlayerHitbox;
 }
 
 /* gAreaMetadata is a single USA-baseline table for all regions (see
