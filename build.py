@@ -309,9 +309,12 @@ def check_deps(non_interactive: bool = False) -> bool:
             continue
         # Try to fetch this one specifically; ignore failures unless
         # it's on the required list.
+        # GIT_TERMINAL_PROMPT=0: a private submodule must fail, not stop
+        # the build at an interactive "Username for github.com" prompt.
         try:
             run_cmd(["git", "submodule", "update", "--init", "--recursive",
-                     "--depth", "1", "--", rel], cwd=REPO_ROOT)
+                     "--depth", "1", "--", rel], cwd=REPO_ROOT,
+                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
             fetched_any = True
         except RuntimeError:
             if rel in REQUIRED_SUBMODULES:
