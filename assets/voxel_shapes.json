@@ -1,0 +1,748 @@
+{
+  "0": {
+    "tiles": {
+      "1000": "block",
+      "1001": "block",
+      "1002": "block",
+      "1003": "block",
+      "1004": "block",
+      "1005": "block",
+      "1006": "prop",
+      "123": "block",
+      "124": "block",
+      "125": "block",
+      "126": "block",
+      "135": "block",
+      "357": "prop",
+      "358": "prop",
+      "374": "prop",
+      "63": "prop",
+      "78": "prop",
+      "992": "prop",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block",
+      "998": "block"
+    }
+  },
+  "1": {
+    "tiles": {
+      "1005": "block",
+      "1156": "block",
+      "1166": "block",
+      "1167": "block",
+      "1170": "block",
+      "1171": "block",
+      "1172": "block",
+      "1173": "block",
+      "456": "block",
+      "962": "block",
+      "991": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "10": {
+    "tiles": {
+      "1051": "block",
+      "112": "prop",
+      "194": "block",
+      "198": "block",
+      "452": "block",
+      "453": "block",
+      "455": "block",
+      "456": "block",
+      "85": "prop",
+      "962": "block",
+      "994": "block",
+      "995": "block",
+      "997": "block"
+    }
+  },
+  "104": {
+    "tiles": {
+      "118": "block",
+      "865": "block",
+      "961": "block",
+      "966": "block",
+      "967": "block",
+      "974": "block",
+      "975": "block"
+    }
+  },
+  "11": {
+    "tiles": {
+      "1002": "block",
+      "1011": "block",
+      "1012": "block",
+      "1047": "block",
+      "1082": "block",
+      "124": "block",
+      "135": "block",
+      "357": "prop",
+      "358": "prop",
+      "374": "prop",
+      "63": "prop",
+      "78": "prop",
+      "976": "block",
+      "977": "block",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "112": {
+    "tiles": {
+      "115": "block",
+      "118": "block",
+      "123": "block",
+      "124": "block",
+      "125": "block",
+      "126": "block",
+      "135": "block",
+      "136": "block",
+      "137": "block",
+      "138": "block",
+      "226": "block",
+      "230": "block",
+      "432": "block",
+      "433": "block",
+      "434": "block",
+      "435": "block",
+      "917": "block",
+      "918": "block",
+      "919": "block",
+      "954": "block",
+      "955": "block",
+      "959": "block",
+      "960": "block",
+      "969": "prop"
+    }
+  },
+  "12": {
+    "tiles": {
+      "135": "block"
+    }
+  },
+  "120": {
+    "tiles": {
+      "135": "block",
+      "136": "block"
+    }
+  },
+  "128": {
+    "tiles": {
+      "1009": "block",
+      "1010": "block",
+      "1172": "block",
+      "1173": "block",
+      "135": "block",
+      "157": "block",
+      "962": "block"
+    }
+  },
+  "129": {
+    "tiles": {
+      "112": "prop"
+    }
+  },
+  "13": {
+    "tiles": {
+      "1166": "block",
+      "1170": "block"
+    }
+  },
+  "136": {
+    "tiles": {
+      "115": "block",
+      "117": "block",
+      "118": "block",
+      "1238": "block",
+      "125": "block",
+      "126": "block",
+      "1283": "block",
+      "135": "block",
+      "137": "block",
+      "143": "block",
+      "144": "block",
+      "433": "block",
+      "435": "block",
+      "918": "block",
+      "919": "block",
+      "929": "block",
+      "959": "block",
+      "960": "block",
+      "965": "block",
+      "974": "block"
+    }
+  },
+  "137": {
+    "tiles": {
+      "1238": "block",
+      "157": "block"
+    }
+  },
+  "141": {
+    "tiles": {
+      "979": "block",
+      "980": "block",
+      "981": "block"
+    }
+  },
+  "15": {
+    "tiles": {
+      "135": "block"
+    }
+  },
+  "16": {
+    "tiles": {
+      "1000": "block",
+      "1001": "block",
+      "135": "block",
+      "136": "block",
+      "157": "block",
+      "961": "block",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "18": {
+    "tiles": {
+      "1178": "block"
+    }
+  },
+  "19": {
+    "tiles": {
+      "135": "block"
+    }
+  },
+  "2": {
+    "tiles": {
+      "1000": "block",
+      "1001": "block",
+      "1067": "block",
+      "1104": "block",
+      "1106": "block",
+      "1108": "block",
+      "1109": "block",
+      "1111": "block",
+      "1123": "block",
+      "1126": "block",
+      "1127": "block",
+      "1128": "block",
+      "1129": "block",
+      "1134": "block",
+      "1137": "block",
+      "135": "block",
+      "358": "prop",
+      "369": "block",
+      "370": "block",
+      "374": "prop",
+      "454": "block",
+      "608": "prop",
+      "609": "block",
+      "612": "prop",
+      "613": "block",
+      "63": "prop",
+      "962": "block",
+      "993": "block",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "20": {
+    "tiles": {
+      "1051": "block",
+      "452": "block",
+      "455": "block",
+      "456": "block",
+      "962": "block"
+    }
+  },
+  "21": {
+    "tiles": {
+      "1104": "block",
+      "1106": "block",
+      "1109": "block",
+      "1111": "block",
+      "1134": "block",
+      "1137": "block",
+      "135": "block",
+      "374": "prop",
+      "63": "prop",
+      "962": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "23": {
+    "tiles": {
+      "1095": "block",
+      "1096": "block",
+      "954": "block",
+      "955": "block"
+    }
+  },
+  "24": {
+    "tiles": {
+      "1051": "block",
+      "157": "block",
+      "621": "block",
+      "653": "block",
+      "962": "block"
+    }
+  },
+  "25": {
+    "tiles": {
+      "621": "block",
+      "624": "block"
+    }
+  },
+  "26": {
+    "tiles": {
+      "112": "prop",
+      "452": "block",
+      "453": "block",
+      "455": "block",
+      "456": "block"
+    }
+  },
+  "3": {
+    "tiles": {
+      "1000": "block",
+      "1001": "block",
+      "1002": "block",
+      "1051": "block",
+      "1063": "block",
+      "1111": "block",
+      "1146": "block",
+      "115": "block",
+      "135": "block",
+      "357": "prop",
+      "358": "prop",
+      "372": "prop",
+      "374": "prop",
+      "468": "prop",
+      "469": "prop",
+      "470": "prop",
+      "475": "block",
+      "478": "block",
+      "621": "block",
+      "624": "block",
+      "63": "prop",
+      "78": "prop",
+      "85": "prop",
+      "887": "block",
+      "90": "prop",
+      "962": "block",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "33": {
+    "tiles": {
+      "1000": "block",
+      "1127": "block",
+      "143": "block",
+      "144": "block",
+      "158": "block",
+      "962": "block"
+    }
+  },
+  "35": {
+    "tiles": {
+      "1000": "block",
+      "1001": "block",
+      "1126": "block",
+      "1127": "block"
+    }
+  },
+  "36": {
+    "tiles": {
+      "1170": "block",
+      "1171": "block",
+      "144": "block",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "38": {
+    "tiles": {
+      "432": "block",
+      "433": "block",
+      "434": "block",
+      "435": "block",
+      "79": "prop",
+      "954": "block",
+      "955": "block",
+      "959": "block",
+      "960": "block",
+      "962": "block"
+    }
+  },
+  "39": {
+    "tiles": {
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "4": {
+    "tiles": {
+      "1002": "block",
+      "1003": "block",
+      "1051": "block",
+      "1082": "block",
+      "1085": "block",
+      "1086": "block",
+      "1095": "block",
+      "1096": "block",
+      "115": "block",
+      "123": "block",
+      "124": "block",
+      "125": "block",
+      "126": "block",
+      "178": "block",
+      "182": "block",
+      "194": "block",
+      "198": "block",
+      "433": "block",
+      "435": "block",
+      "458": "block",
+      "460": "block",
+      "63": "prop",
+      "954": "block",
+      "955": "block",
+      "962": "block"
+    }
+  },
+  "40": {
+    "tiles": {
+      "1365": "block"
+    }
+  },
+  "41": {
+    "tiles": {
+      "988": "block"
+    }
+  },
+  "42": {
+    "tiles": {
+      "432": "block",
+      "433": "block",
+      "434": "block",
+      "435": "block",
+      "79": "prop",
+      "954": "block",
+      "955": "block",
+      "959": "block",
+      "960": "block"
+    }
+  },
+  "43": {
+    "tiles": {
+      "112": "prop",
+      "115": "block",
+      "432": "block",
+      "433": "block",
+      "434": "block",
+      "435": "block",
+      "954": "block",
+      "955": "block",
+      "959": "block",
+      "960": "block"
+    }
+  },
+  "44": {
+    "tiles": {
+      "1166": "block",
+      "1167": "block",
+      "1170": "block",
+      "1171": "block",
+      "1368": "block",
+      "1369": "block",
+      "1370": "block",
+      "433": "block",
+      "954": "block"
+    }
+  },
+  "46": {
+    "tiles": {
+      "1001": "block",
+      "1126": "block",
+      "1127": "block",
+      "1373": "block",
+      "991": "block"
+    }
+  },
+  "47": {
+    "tiles": {
+      "115": "block",
+      "143": "block",
+      "144": "block",
+      "432": "block",
+      "433": "block",
+      "434": "block",
+      "435": "block",
+      "954": "block",
+      "955": "block",
+      "959": "block",
+      "960": "block"
+    }
+  },
+  "48": {
+    "tiles": {
+      "157": "block",
+      "158": "block",
+      "162": "block"
+    }
+  },
+  "49": {
+    "tiles": {
+      "1091": "block",
+      "135": "block",
+      "999": "block"
+    }
+  },
+  "5": {
+    "tiles": {
+      "1002": "block",
+      "1088": "block",
+      "1090": "block",
+      "1092": "block",
+      "1093": "block",
+      "1094": "block",
+      "135": "block",
+      "157": "block",
+      "366": "block",
+      "455": "block",
+      "456": "block",
+      "85": "prop",
+      "962": "block",
+      "966": "block",
+      "967": "block",
+      "969": "block"
+    }
+  },
+  "50": {
+    "tiles": {
+      "143": "block",
+      "144": "block",
+      "230": "block",
+      "432": "block",
+      "433": "block",
+      "434": "block",
+      "435": "block",
+      "79": "prop",
+      "954": "block",
+      "955": "block",
+      "959": "block",
+      "960": "block"
+    }
+  },
+  "51": {
+    "tiles": {
+      "115": "block",
+      "1238": "block",
+      "432": "block",
+      "434": "block",
+      "954": "block",
+      "955": "block",
+      "961": "block"
+    }
+  },
+  "53": {
+    "tiles": {
+      "1238": "block",
+      "961": "block",
+      "967": "block",
+      "974": "block",
+      "975": "block"
+    }
+  },
+  "54": {
+    "tiles": {
+      "115": "block",
+      "1238": "block",
+      "157": "block"
+    }
+  },
+  "6": {
+    "tiles": {
+      "1002": "block",
+      "1021": "block",
+      "1051": "block",
+      "1062": "block",
+      "1063": "block",
+      "1064": "block",
+      "1065": "block",
+      "374": "prop",
+      "453": "block",
+      "455": "block",
+      "456": "block",
+      "458": "block",
+      "459": "block",
+      "460": "block",
+      "85": "prop",
+      "962": "block"
+    }
+  },
+  "65": {
+    "tiles": {
+      "115": "block",
+      "1193": "block",
+      "1208": "block"
+    }
+  },
+  "66": {
+    "tiles": {
+      "157": "block"
+    }
+  },
+  "67": {
+    "tiles": {
+      "961": "block"
+    }
+  },
+  "7": {
+    "tiles": {
+      "1005": "block",
+      "1156": "block",
+      "123": "block",
+      "124": "block",
+      "125": "block",
+      "126": "block",
+      "63": "prop",
+      "69": "prop",
+      "70": "prop",
+      "71": "prop",
+      "72": "prop",
+      "73": "prop",
+      "74": "prop",
+      "75": "prop",
+      "76": "prop",
+      "77": "prop",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "72": {
+    "tiles": {
+      "112": "prop",
+      "117": "block",
+      "1227": "block",
+      "135": "block",
+      "138": "block",
+      "433": "block",
+      "435": "block",
+      "866": "block",
+      "960": "block",
+      "966": "block",
+      "974": "block",
+      "979": "block",
+      "980": "block",
+      "981": "block"
+    }
+  },
+  "8": {
+    "tiles": {
+      "590": "block",
+      "592": "block",
+      "962": "block"
+    }
+  },
+  "80": {
+    "tiles": {
+      "125": "block",
+      "126": "block",
+      "135": "block",
+      "137": "block",
+      "157": "block",
+      "887": "block",
+      "918": "block",
+      "919": "block"
+    }
+  },
+  "88": {
+    "tiles": {
+      "1236": "block",
+      "1238": "block",
+      "1239": "block",
+      "125": "block",
+      "126": "block",
+      "135": "block",
+      "136": "block",
+      "137": "block",
+      "138": "block",
+      "432": "block",
+      "434": "block",
+      "54": "block",
+      "866": "block",
+      "867": "block",
+      "868": "block",
+      "918": "block",
+      "919": "block",
+      "954": "block",
+      "955": "block",
+      "975": "block"
+    }
+  },
+  "89": {
+    "tiles": {
+      "1005": "block",
+      "1006": "block",
+      "1054": "block",
+      "1156": "block",
+      "1172": "block",
+      "1173": "block",
+      "1269": "block",
+      "1270": "block"
+    }
+  },
+  "9": {
+    "tiles": {
+      "135": "block",
+      "374": "prop",
+      "85": "prop",
+      "91": "prop",
+      "993": "block",
+      "994": "block",
+      "995": "block",
+      "996": "block",
+      "997": "block"
+    }
+  },
+  "90": {
+    "tiles": {
+      "1238": "block",
+      "157": "block"
+    }
+  },
+  "96": {
+    "tiles": {
+      "117": "block",
+      "1275": "block",
+      "1276": "block",
+      "135": "block",
+      "136": "block",
+      "137": "block",
+      "865": "block",
+      "869": "block",
+      "974": "block",
+      "975": "block",
+      "980": "block"
+    }
+  }
+}

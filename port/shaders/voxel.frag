@@ -14,7 +14,22 @@
 
 layout(location = 0) in vec2 vUv;
 layout(location = 1) flat in uvec4 vParams;
+layout(location = 2) in vec3 vWorld;
 layout(location = 0) out vec4 oColor;
+
+// Walls out of the way (PortVoxelFade in port_voxel.cpp): room geometry
+// standing between the camera and an actor -- Link or an enemy -- thins to
+// a dither, so the actor stays in sight from any camera angle.
+//   uCam.xyz camera, uCam.w 1 = on
+//   uFade = (share kept, radius, feather, aim height above the feet)
+//   uCount.x actors; uActors[i].xyz an actor's feet
+#define FADE_MAX_ACTORS 16
+layout(set = 3, binding = 0) uniform Fade {
+    vec4 uCam;
+    vec4 uFade;
+    ivec4 uCount;
+    vec4 uActors[FADE_MAX_ACTORS];
+};
 
 layout(set = 2, binding = 0) uniform usampler2D uVram; // 256 x 384 R8_UINT (96 KB VRAM)
 layout(set = 2, binding = 1) uniform usampler2D uMaps; // 128 x 256 R16_UINT (bottom rows 0-127, top 128-255)
@@ -38,11 +53,46 @@ uint bgTexel(uint entry, uint charBase, bool bpp8, uint px, uint py) {
     return ci == 0u ? 0u : (entry >> 12) * 16u + ci;
 }
 
+// How much of this pixel stays: 1, or down to uFade.x where it lies within
+// uFade.y (+ uFade.z feathered) of the sight line from the camera to an
+// actor, in front of the actor and above the ground it stands on (the floor
+// under it never thins).
+float fadeKeep() {
+    if (uCam.w < 0.5)
+        return 1.0;
+    float w = 0.0;
+    for (int i = 0; i < FADE_MAX_ACTORS; i++) {
+        if (i >= uCount.x)
+            break;
+        vec3 feet = uActors[i].xyz;
+        if (vWorld.y <= feet.y + 1.0)
+            continue;
+        vec3 a = feet + vec3(0.0, uFade.w, 0.0) - uCam.xyz;
+        float L2 = dot(a, a);
+        if (L2 == 0.0)
+            continue;
+        float t = dot(vWorld - uCam.xyz, a) / L2;
+        if (t <= 0.0 || t >= 1.0)
+            continue;
+        float d = length(vWorld - (uCam.xyz + a * t));
+        w = max(w, 1.0 - smoothstep(0.0, 1.0, (d - uFade.y) / uFade.z));
+    }
+    return mix(1.0, uFade.x, w);
+}
+
+// 4x4 Bayer threshold: a thinned surface keeps a share of its pixels,
+// opaque, so depth stays right with no sorting (and it reads as pixel art).
+float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+
 void main() {
     ivec2 p = ivec2(floor(vUv));
     uint idx;
     if (vParams.x == 0u) {
         if (p.x < 0 || p.y < 0 || p.x >= 1024 || p.y >= 1024)
+            discard;
+        float keep = fadeKeep();
+        if (keep < 1.0 && bayer4(gl_FragCoord.xy) >= keep)
             discard;
         uint entry = texelFetch(uMaps, ivec2(p.x >> 3, (p.y >> 3) + int(vParams.y)), 0).r;
         // w: bit0 8bpp, bit1 fill-transparent, bits 8-16 prop mask slot+1, bits 20-27 fill palette index

@@ -12,9 +12,11 @@ layout(set = 1, binding = 0) uniform Camera {
 
 layout(location = 0) out vec2 vUv;
 layout(location = 1) flat out uvec4 vParams;
+layout(location = 2) out vec3 vWorld; // world position, for the fade in voxel.frag
 
 void main() {
     vUv = aUv;
     vParams = aParams;
+    vWorld = aPos;
     gl_Position = uMvp * vec4(aPos, 1.0);
 }
