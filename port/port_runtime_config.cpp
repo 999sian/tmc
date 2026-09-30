@@ -103,6 +103,7 @@ bool sDecoupleRender = true;
 bool sShowFps = false;
 /* Experimental 3D room view on the SDL_GPU backend (port_voxel.cpp). */
 bool sVoxelView = false;
+bool sVoxelWallFade = true;
 /* Voxel view camera elevation in degrees (F8 stepper). */
 int sVoxelPitch = 50;
 int sPreferredRegion = -1;
@@ -271,6 +272,7 @@ const BoolCfg kBoolCfg[] = {
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
     { "voxel_view", &sVoxelView, false },
+    { "voxel_wall_fade", &sVoxelWallFade, true },
     { "tts_enabled", &sTtsEnabled, false },
     { "a11y_cues", &sA11yCues, false },
     { "a11y_footsteps", &sA11yFootsteps, false },
@@ -858,6 +860,15 @@ extern "C" bool Port_Config_GetVoxelView(void) {
 extern "C" void Port_Config_SetVoxelView(bool on) {
     sVoxelView = on;
     sConfigJson["voxel_view"] = on;
+    SaveConfig();
+}
+/* Walls between the camera and Link or an enemy thin to a dither. */
+extern "C" bool Port_Config_GetVoxelWallFade(void) {
+    return sVoxelWallFade;
+}
+extern "C" void Port_Config_SetVoxelWallFade(bool on) {
+    sVoxelWallFade = on;
+    sConfigJson["voxel_wall_fade"] = on;
     SaveConfig();
 }
 /* Camera elevation presets, low (dramatic) to near top-down. */
