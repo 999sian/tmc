@@ -6,6 +6,7 @@ Run from repository root: python3 build.py
 
 import argparse
 import hashlib
+import json
 import os
 import platform
 import shutil
@@ -483,6 +484,39 @@ def stage_rando_logic(dist_dir: Path) -> None:
     shutil.copy2(source, target)
     ok(f"default.logic → {target.relative_to(REPO_ROOT)}")
 
+def stage_voxel_shapes(dist_dir: Path) -> None:
+    """Ship the 3D view's default tile shapes, merged under a local copy.
+
+    assets/voxel_shapes.json holds, per area, the tile types the 3D view
+    (port/port_voxel.cpp) would otherwise shape wrong. The game's own copy
+    is edited from F8 and saved over; what it has already wins, tile by
+    tile, and only what it lacks is added.
+    """
+    source = REPO_ROOT / "assets" / "voxel_shapes.json"
+    target = dist_dir / "voxel_shapes.json"
+    if not source.is_file():
+        return
+    shapes = json.loads(source.read_text())
+    added = 0
+    if target.exists():
+        try:
+            local = json.loads(target.read_text())
+        except ValueError:
+            warn(f"{target.relative_to(REPO_ROOT)} is not JSON — keeping it as is")
+            return
+        for area, entry in shapes.items():
+            mine = local.setdefault(area, {})
+            tiles = mine.setdefault("tiles", {})
+            for tile, shape in entry.get("tiles", {}).items():
+                if tile not in tiles:
+                    tiles[tile] = shape
+                    added += 1
+        shapes = local
+    else:
+        added = sum(len(e.get("tiles", {})) for e in shapes.values())
+    target.write_text(json.dumps(shapes, indent=2, sort_keys=True) + "\n")
+    ok(f"voxel_shapes.json → {target.relative_to(REPO_ROOT)} ({added} tile shapes added)")
+
 def build_version(version: str, env: dict, non_interactive: bool = False,
                   slim: bool = False, multi_region: bool = True) -> Optional[Path]:
     """Build tmc_pc for `version` and stage it under dist/<version>/.
@@ -678,6 +712,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         # the embedded sounds.json fallback (compiled into the
         # binary by tools/generate_sounds_embed.py) handles audio.
         stage_rando_logic(dist_dir)
+        stage_voxel_shapes(dist_dir)
         info("Slim mode — ROM assets/, assets_src/, and sounds.json are NOT copied.")
         info("tmc_pc will self-extract assets on first launch using the embedded extractor.")
         return dst_bin
@@ -703,6 +738,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         if rando_backup.is_dir():
             shutil.copytree(rando_backup, rando_dst, dirs_exist_ok=True)
     stage_rando_logic(dist_dir)
+    stage_voxel_shapes(dist_dir)
 
     sounds_src = REPO_ROOT / "assets" / "sounds.json"
     if sounds_src.exists():
