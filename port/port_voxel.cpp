@@ -23,6 +23,9 @@
 bool Port_Voxel_Present(SDL_GPUCommandBuffer*, SDL_GPUTexture*, int, int) {
     return false;
 }
+bool Port_Voxel_IsDrawing(void) {
+    return false;
+}
 void Port_Voxel_Shutdown(void) {
 }
 PortVoxelTileAhead Port_Voxel_TileAhead(void) {
@@ -1322,7 +1325,9 @@ static bool VoxelDebug(void) {
     return on == 1;
 }
 
-bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
+static bool sDrewLastFrame = false;
+
+static bool PresentImpl(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
     static unsigned sPresentFrame = 0;
     ++sPresentFrame;
     if (sShotPending)
@@ -1376,6 +1381,10 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
         ObjRect o;
         if (!DecodeObj(i, obj1d, o))
             continue;
+        if (tag.parked) { /* beyond OAM's reach: port_draw.c parked it, real spot here */
+            o.x = tag.trueX;
+            o.y = tag.trueY;
+        }
         const float x0 = o.x + scrollX, x1 = x0 + o.w;
         const int sy0 = o.y, sy1 = sy0 + o.h;
         const float elev = tag.layer == 2 ? kTopLayerLift : 0.0f;
@@ -1675,6 +1684,15 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
         sShotPending = true; /* written next frame, after the GPU finished */
     }
     return true;
+}
+
+bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
+    sDrewLastFrame = PresentImpl(cmd, swap, swapW, swapH);
+    return sDrewLastFrame;
+}
+
+bool Port_Voxel_IsDrawing(void) {
+    return sDrewLastFrame;
 }
 
 void Port_Voxel_Shutdown(void) {

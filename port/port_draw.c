@@ -421,6 +421,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
     /* OAM entries start at offset 0x20 in OAMControls, each 8 bytes */
     u8* oamBase = (u8*)&gOAMControls.oam[0];
     u8* ip = oamBase + updated * 8;
+    const bool voxelView = Port_Voxel_IsDrawing();
 
     for (int i = 0; i < count; i++) {
         if (updated >= 0x80) {
@@ -460,15 +461,24 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
         if (y >= 160) {
             continue;
         }
-        if (y + (s32)se[3] <= 0) {
-            continue;
-        }
-
         x -= (s32)se[0]; /* subtract x anchor */
-        if (x >= Port_Widescreen_EffectiveViewWidth()) {
-            continue;
-        }
-        if (x + (s32)se[2] <= 0) {
+        const s32 viewW = Port_Widescreen_EffectiveViewWidth();
+        bool parked = false;
+        if (voxelView) {
+            /* The 3D view's tilted camera sees past the GBA screen's top and
+             * sides. OAM can only encode y >= -96 and x in [viewW-512, viewW);
+             * a piece outside that is parked at y=160 (rows 160..255, never
+             * shown by the 2D PPU) with its true x/y in the voxel tag. A piece
+             * taller than 96 rows can't park without wrapping onto row 0. */
+            if (y < -PORT_VOXEL_DRAW_TOP_MARGIN || x >= viewW + PORT_VOXEL_DRAW_SIDE_MARGIN ||
+                x + (s32)se[2] <= -PORT_VOXEL_DRAW_SIDE_MARGIN)
+                continue;
+            if (y < PORT_VOXEL_OAM_MIN_Y || x >= viewW || x < viewW - 512) {
+                if (PORT_VOXEL_OAM_PARK_Y + (s32)se[3] > 256)
+                    continue;
+                parked = true;
+            }
+        } else if (y + (s32)se[3] <= 0 || x >= viewW || x + (s32)se[2] <= 0) {
             continue;
         }
 
@@ -480,7 +490,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
          *   bits 25-29: attr1.matrixNum/flip (from 'flags')
          *   bits 30-31: attr1.size
          */
-        u32 oamWord = (u32)(y & 0xFF);            /* y position */
+        u32 oamWord = (u32)((parked ? PORT_VOXEL_OAM_PARK_Y : y) & 0xFF); /* y position */
         oamWord |= (u32)((x & 0x1FF)) << 16;      /* x position */
         oamWord |= flags;                         /* base flags */
         oamWord |= (u32)(shapeInfo & 0xC0) << 8;  /* shape → attr0 bits 14-15 */
@@ -504,6 +514,9 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
         if (sSwampClipActive)
             virtuappu_mode1_obj_clip_mark[updated & 0x7F] = 1;
         gPortVoxelOamTagsBuild[updated & 0x7F] = sVoxelCtx;
+        gPortVoxelOamTagsBuild[updated & 0x7F].trueX = (s16)x;
+        gPortVoxelOamTagsBuild[updated & 0x7F].trueY = (s16)y;
+        gPortVoxelOamTagsBuild[updated & 0x7F].parked = parked;
 
         updated++;
     }
@@ -636,6 +649,21 @@ u32 CheckOnScreen(Entity* entity) {
     return 1;
 }
 
+/* Draw-only visibility. CheckOnScreen also feeds gameplay (scripts, AI), so
+ * it keeps the GBA bounds; the 3D view's tilted camera sees above and beside
+ * the GBA screen, so entities there still need sprites. */
+static u32 CheckOnScreenForDraw(Entity* entity) {
+    if (CheckOnScreen(entity))
+        return 1;
+    if (!Port_Voxel_IsDrawing())
+        return 0;
+    const s32 x = (s32)entity->x.HALF.HI - (s32)gRoomControls.scroll_x;
+    const s32 y = (s32)entity->y.HALF.HI - (s32)gRoomControls.scroll_y + (s32)entity->z.HALF.HI;
+    const s32 viewW = Port_Widescreen_EffectiveViewWidth();
+    return x >= -(PORT_VOXEL_DRAW_SIDE_MARGIN + 0x3F) && x < viewW + PORT_VOXEL_DRAW_SIDE_MARGIN + 0x3F &&
+           y >= -(PORT_VOXEL_DRAW_TOP_MARGIN + 0x3F) && y < 160 + 0x3F;
+}
+
 /* ---- DrawEntity (port of ASM at 0x0800404C) ----
  *
  * Called from ObjectUpdate / NpcUpdate / EnemyUpdate / etc.
@@ -656,7 +684,7 @@ void DrawEntity(Entity* entity) {
         u8 rawSS = *(u8*)&entity->spriteSettings;
         if (!(rawSS & 2)) {
             /* Not "draw always" — check on-screen */
-            if (!CheckOnScreen(entity)) {
+            if (!CheckOnScreenForDraw(entity)) {
                 gUnk_02024048 = 0;
                 return;
             }
