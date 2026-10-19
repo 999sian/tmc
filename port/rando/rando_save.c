@@ -253,11 +253,12 @@ static bool LoadAll(void) {
             continue;
         bool invalid_logic = rec->logic_mode > 1 ||
                              (rec->logic_mode && (rec->count > RANDO_LOGIC_MAX_LOCATIONS ||
-                                                  rec->logic_fingerprint == 0 ||
-                                                  rec->logic_override_count > RANDO_SIDECAR_MAX_LOGIC_OVERRIDES));
+                                                  rec->logic_fingerprint == 0));
         bool invalid_legacy = !rec->logic_mode && rec->count > RANDO_LOCATION_COUNT;
         if (rec->count == 0 || invalid_logic || invalid_legacy || rec->item_difficulty >= RANDO_ITEM_POOL_COUNT ||
-            rec->override_count > RANDO_SIDECAR_MAX_OVERRIDES || rec->entrance_count > RANDO_SIDECAR_MAX_ENTRANCES) {
+            rec->override_count > RANDO_SIDECAR_MAX_OVERRIDES ||
+            rec->logic_override_count > RANDO_SIDECAR_MAX_LOGIC_OVERRIDES ||
+            rec->entrance_count > RANDO_SIDECAR_MAX_ENTRANCES) {
             fprintf(stderr, "[rando] warning: sidecar slot %d corrupt (count=%u, difficulty=%u); cleared\n", i,
                     rec->count, rec->item_difficulty);
             sInvalidSlotMask |= (uint8_t)(1u << i);
