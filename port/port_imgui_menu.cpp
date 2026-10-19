@@ -514,7 +514,10 @@ static void DoQuitToTitle(bool saveFirst) {
         /* Slot 0 is the F5/F6 quicksave slot — writing there mirrors
          * the user pressing F5 first. They can still F6-load it on
          * the next launch. */
-        Port_QuickSave_SaveSlot(0);
+        if (!Port_QuickSave_SaveSlot(0)) {
+            Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
+            return;
+        }
     }
     SetTask(0 /* TASK_TITLE */);
     Port_DebugMenu_Toggle(); /* close the F8 ribbon */
@@ -1086,9 +1089,12 @@ static void DrawQuitModal(void) {
                            "your last in-game save is lost.");
         ImGui::Spacing();
         if (ImGui::Button("Save & Quit", ImVec2(140, 0))) {
-            Port_QuickSave_SaveSlot(0);
-            sQuitModalConfirmed = true;
-            ImGui::CloseCurrentPopup();
+            if (Port_QuickSave_SaveSlot(0)) {
+                sQuitModalConfirmed = true;
+                ImGui::CloseCurrentPopup();
+            } else {
+                Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Quit Without Saving", ImVec2(180, 0))) {
