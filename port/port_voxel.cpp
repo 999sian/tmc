@@ -1252,7 +1252,8 @@ static void GatherFadeActors(PortVoxelFade& f) {
         if (n >= kFadeMaxActors)
             return;
         f.actors[n][0] = (float)(e.x.HALF.HI - gRoomControls.origin_x);
-        f.actors[n][1] = std::max(0.0f, -(float)e.z.HALF.HI); /* z is up-negative */
+        f.actors[n][1] = (e.collisionLayer == 2 ? kTopLayerLift : 0.0f) +
+                         std::max(0.0f, -(float)e.z.HALF.HI); /* match the sprite layer and jump */
         f.actors[n][2] = (float)(e.y.HALF.HI - gRoomControls.origin_y);
         f.actors[n][3] = 0.0f;
         ++n;

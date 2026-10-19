@@ -617,10 +617,10 @@ static void ClearEntityDrawLists(void) {
     }
 }
 
-/* Deferred draw entry (packed as on GBA: two shorts per entry) */
+/* Native coordinates exceed the GBA shadow encoding in the tilted 3D view. */
 typedef struct {
-    s16 packed0; /* (screenX << 6) | shadowType */
-    s16 packed1; /* (screenY << 6) | priority   */
+    s32 packed0; /* screenX * 64 + shadowType */
+    s32 packed1; /* screenY * 64 + priority   */
 } DeferredEntry;
 
 typedef struct {
@@ -1021,9 +1021,9 @@ static void ProcessEntityForDraw(Entity* entity) {
     sDeferredList.count++;
     DeferredEntry* de = &sDeferredList.entries[sDeferredList.count - 1];
     u16 prioBits = (extra >> 10) & 3;
-    de->packed1 = (s16)(u16)(((u32)(u16)deferY << 6) | (u32)prioBits);
+    de->packed1 = deferY * 64 + prioBits;
     u8 shadowType = (*(u8*)&entity->spriteSettings & 0x30) >> 4;
-    de->packed0 = (s16)(u16)(((u32)(u16)x << 6) | (u32)shadowType);
+    de->packed0 = x * 64 + shadowType;
 }
 
 /* ---- ProcessDrawList (port of sub_080B2534) ---- */
