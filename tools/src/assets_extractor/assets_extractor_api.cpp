@@ -458,10 +458,13 @@ bool ExtractAssets(const Options& opt, std::string* error) {
          * Finished before we return, so nothing ever sees a half-deleted tree. */
         std::vector<std::filesystem::path> files;
         std::error_code ec;
-        for (auto it = std::filesystem::recursive_directory_iterator(opt.editable_root, ec);
-             !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
-            if (it->is_regular_file(ec)) {
-                files.push_back(it->path());
+        // Like remove_all, never traverse a symlink supplied as the root.
+        if (!std::filesystem::is_symlink(std::filesystem::symlink_status(opt.editable_root, ec))) {
+            for (auto it = std::filesystem::recursive_directory_iterator(opt.editable_root, ec);
+                 !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+                if (it->is_regular_file(ec)) {
+                    files.push_back(it->path());
+                }
             }
         }
         PortAssetLog::ParallelFor<std::size_t>(0, files.size(), [&](std::size_t i) {

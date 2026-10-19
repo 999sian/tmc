@@ -22,7 +22,7 @@ namespace PortAssetPipeline {
  * stamped by an older binary are treated as stale. Checked by both the
  * JSON-tree rebuild path (RuntimeAssetsNeedRebuild) and the warm-launch
  * stamp check (AssetExtractorApi::RuntimeUpToDate). */
-inline constexpr int kBuildStateVersion = 3; /* v3: EU paletteGroups 208 -> 207 */
+inline constexpr int kBuildStateVersion = 4; /* v4: largest duplicate index entry for loose output */
 
 /* Read the whole file at `path` into `out`, resized to its size.
  * Returns true on success; a 0-byte file succeeds with `out` empty. On

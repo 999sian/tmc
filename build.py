@@ -494,18 +494,33 @@ def stage_rando_logic(dist_dir: Path) -> None:
 def _assets_fingerprint(version: str) -> str:
     """Hash of everything the xmake extract/convert/build_assets tasks read:
     the verified ROM (identified by its expected SHA1), the asset JSON
-    descriptions, and the sources of asset_processor plus the converters it
-    shells out to. Game code is not an input, so code-only rebuilds can reuse
+    descriptions, extractor/index/pipeline, and asset_processor plus its
+    converters. Game code is not an input, so code-only rebuilds can reuse
     build/<version>/assets."""
     h = hashlib.sha1()
     h.update(f"{version}:{VERSIONS[version]['sha1']}\n".encode())
     inputs = sorted((REPO_ROOT / "assets").glob("*.json"))
-    for tool in ("asset_processor", "gbagfx", "aif2pcm", "mid2agb", "agb2mid", "util"):
+    for tool in ("asset_processor", "assets_extractor", "gbagfx", "aif2pcm", "mid2agb", "agb2mid", "util"):
         inputs += sorted(p for p in (REPO_ROOT / "tools" / "src" / tool).rglob("*") if p.is_file())
+    for stem in ("port_asset_index", "port_asset_pipeline", "port_asset_pak", "port_asset_log"):
+        inputs += sorted((REPO_ROOT / "port").glob(stem + ".*"))
     for p in inputs:
         h.update(p.relative_to(REPO_ROOT).as_posix().encode() + b"\0")
         h.update(p.read_bytes())
     return h.hexdigest()
+
+def _invalidate_region_caches(dist_dir: Path, fingerprint: str) -> None:
+    """Keep regional extraction caches only for the pipeline that produced them."""
+    stamp = dist_dir / ".assets_fingerprint"
+    if stamp.is_file() and stamp.read_text().strip() == fingerprint:
+        return
+    for tree in ("assets", "assets_src"):
+        for region in ("usa", "eu", "jp"):
+            cache = dist_dir / tree / region
+            if cache.is_symlink():
+                cache.unlink()
+            elif cache.is_dir():
+                shutil.rmtree(cache)
 
 def stage_voxel_shapes(dist_dir: Path) -> None:
     """Ship the 3D view's default tile shapes, merged under a local copy.
@@ -739,6 +754,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
                 shutil.copy2(src_lib, dst_lib)
                 ok(f"{src_lib.name} →  dist/{version}/")
 
+    _invalidate_region_caches(dist_dir, assets_fingerprint)
+
     if slim:
         # In slim mode only the small editable logic file is staged.
         # tmc_pc's embedded extractor will create ROM assets/ on first run, and
@@ -748,6 +765,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         stage_voxel_shapes(dist_dir)
         info("Slim mode — ROM assets/, assets_src/, and sounds.json are NOT copied.")
         info("tmc_pc will self-extract assets on first launch using the embedded extractor.")
+        (dist_dir / ".assets_fingerprint").write_text(assets_fingerprint + "\n")
         return dst_bin
 
     # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
@@ -755,8 +773,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     # randomizer files. Keep that directory across the ROM asset refresh.
     # Also keep tmc_pc's per-region runtime caches (assets/<region>/ and
     # assets_src/<region>/): wiping them made the first launch after every
-    # full build re-extract. tmc_pc still re-extracts on its own when a cache
-    # is stale (ROM size/mtime or extractor version in .asset_build_state.json).
+    # full build re-extract. Changed pipeline inputs invalidate these above;
+    # tmc_pc also checks ROM size/mtime and the extractor output version.
     kept = [Path("assets") / "rando"] + [
         Path(tree) / region for tree in ("assets", "assets_src") for region in ("usa", "eu", "jp")
     ]
@@ -790,6 +808,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         # lets users tweak song metadata without rebuilding.
         warn("assets/sounds.json not found — using the embedded fallback baked into tmc_pc")
 
+    (dist_dir / ".assets_fingerprint").write_text(assets_fingerprint + "\n")
     return dst_bin
 
 # ── Main ──────────────────────────────────────────────────────────────────────
