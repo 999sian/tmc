@@ -15,6 +15,15 @@ void buildAsset(std::unique_ptr<BaseAsset>& assetHandler);
 
 enum Mode { EXTRACT, CONVERT, BUILD };
 
+struct AssetJob {
+    std::unique_ptr<BaseAsset> handler;
+    bool recordsOffset; // an offset calculator was active when this asset was listed
+};
+// Run the current mode's work for every job on a worker pool (TMC_ASSET_JOBS
+// threads, default: all cores). Jobs touching the same file run in order on one thread.
+void runJobs(std::vector<AssetJob>& jobs, const std::vector<char>& baserom,
+             const std::filesystem::file_time_type& configModified);
+
 // Arguments
 extern bool gVerbose;
 extern Mode gMode;

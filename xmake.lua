@@ -293,13 +293,20 @@ target_end()
 -- asset_processor
 target("asset_processor")
     set_kind("binary")
-    set_languages("cxx17")
+    set_languages("c11", "cxx17")
     set_targetdir(tools_bin)
     add_files("tools/src/asset_processor/*.cpp")
     add_files("tools/src/asset_processor/assets/*.cpp")
+    -- gbagfx and aif2pcm are linked in and called in-process (util.cpp)
+    -- instead of being launched once per graphics/map/sample asset.
+    add_files("tools/src/gbagfx/*.c", {defines = "main=gbagfx_main"})
+    add_files("tools/src/aif2pcm/*.c", {defines = "main=aif2pcm_main"})
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
-    add_packages("nlohmann_json")
+    add_packages("nlohmann_json", "libpng", "zlib")
+    if is_plat("linux") then
+        add_syslinks("pthread") -- std::thread worker pool; needed before glibc 2.34
+    end
     add_mingw_static_cpp_runtime()
 target_end()
 

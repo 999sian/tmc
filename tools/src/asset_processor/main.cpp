@@ -11,10 +11,17 @@
 #include "assets/subtileset.h"
 #include "offsets.h"
 #include "simple_format.h"
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <mutex>
 #include <nlohmann/json.hpp>
+#include <thread>
 
 using nlohmann::json;
 
@@ -145,6 +152,11 @@ int main(int argc, char** argv) {
 
         std::unique_ptr<OffsetCalculator> offsetCalculator;
 
+        // Collect the config's assets in order. The per-asset work (extract,
+        // convert, build) runs on worker threads; offsets are recorded
+        // afterwards in config order, so the generated headers are identical
+        // to a single-threaded run.
+        std::vector<AssetJob> jobs;
         int currentOffset = 0;
         for (const auto& asset : assets) {
             if (asset.contains("offsets")) { // Offset definition
@@ -176,63 +188,36 @@ int main(int argc, char** argv) {
                 std::filesystem::path path = gAssetsFolder;
                 path = path / asset["path"];
 
-                switch (gMode) {
-                    case EXTRACT: {
-                        std::unique_ptr<BaseAsset> assetHandler = getAssetHandlerByType(path, asset, currentOffset);
-                        if (shouldExtractAsset(path, configModified)) {
-                            if (gVerbose) {
-                                std::cout << "Extracting " << path << "..." << std::endl;
-                            }
+                jobs.push_back({ getAssetHandlerByType(path, asset, currentOffset), offsetCalculator != nullptr });
+            }
+        }
 
-                            extractAsset(assetHandler, baserom);
-                        }
-                        if (offsetCalculator != nullptr) {
-                            offsetCalculator->addAsset(assetHandler->getStart(), assetHandler->getSymbol());
-                        }
-                        break;
+        const auto jobsStart = std::chrono::steady_clock::now();
+        runJobs(jobs, baserom, configModified);
+        if (std::getenv("TMC_ASSET_TIMING")) {
+            const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - jobsStart);
+            std::cout << "[timing] " << config.filename().string() << ": " << jobs.size() << " assets, "
+                      << ms.count() << " ms" << std::endl;
+        }
+
+        if (offsetCalculator != nullptr) {
+            for (const auto& job : jobs) {
+                if (!job.recordsOffset) {
+                    continue;
+                }
+                if (gMode == EXTRACT) {
+                    offsetCalculator->addAsset(job.handler->getStart(), job.handler->getSymbol());
+                } else if (gMode == BUILD) {
+                    // New start is the end of the previous asset.
+                    int start = offsetCalculator->getLastEnd();
+                    // Get the size of the current asset and calculate the end position.
+                    int filesize = static_cast<int>(std::filesystem::file_size(job.handler->getBuildPath()));
+                    // Align by four bytes.
+                    if (filesize % 4 != 0) {
+                        filesize += 4 - (filesize % 4);
                     }
-                    case CONVERT: {
-                        std::unique_ptr<BaseAsset> assetHandler = getAssetHandlerByType(path, asset, currentOffset);
-                        if (!std::filesystem::exists(assetHandler->getBuildPath())) {
-                            std::cerr << "Error: Extracted binary file " << assetHandler->getBuildPath()
-                                      << " does not exist. Run `make` first." << std::endl;
-                            std::exit(1);
-                        }
-                        if (shouldConvertAsset(assetHandler)) {
-                            if (gVerbose) {
-                                std::cout << "Converting " << assetHandler->getAssetPath() << "..." << std::endl;
-                            }
-                            convertAsset(assetHandler, baserom);
-                        }
-                        break;
-                    }
-                    case BUILD: {
-                        std::unique_ptr<BaseAsset> assetHandler = getAssetHandlerByType(path, asset, currentOffset);
-                        if (!std::filesystem::exists(assetHandler->getAssetPath())) {
-                            std::cerr << "Error: Extracted asset file " << assetHandler->getAssetPath()
-                                      << " does not exist. Run `make extractassets` first." << std::endl;
-                            std::exit(1);
-                        }
-                        if (shouldBuildAsset(assetHandler)) {
-                            if (gVerbose) {
-                                std::cout << "Building " << assetHandler->getAssetPath() << "..." << std::endl;
-                            }
-                            buildAsset(assetHandler);
-                        }
-                        if (offsetCalculator != nullptr) {
-                            // New start is the end of the previous asset.
-                            int start = offsetCalculator->getLastEnd();
-                            // Get the size of the current asset and calculate the end position.
-                            int filesize = static_cast<int>(std::filesystem::file_size(assetHandler->getBuildPath()));
-                            // Align by four bytes.
-                            if (filesize % 4 != 0) {
-                                filesize += 4 - (filesize % 4);
-                            }
-                            offsetCalculator->setLastEnd(start + filesize);
-                            offsetCalculator->addAsset(start, assetHandler->getSymbol());
-                        }
-                        break;
-                    }
+                    offsetCalculator->setLastEnd(start + filesize);
+                    offsetCalculator->addAsset(start, job.handler->getSymbol());
                 }
             }
         }
@@ -346,4 +331,125 @@ bool shouldBuildAsset(const std::unique_ptr<BaseAsset>& assetHandler) {
 
 void buildAsset(std::unique_ptr<BaseAsset>& assetHandler) {
     assetHandler->buildToBinary();
+}
+
+static std::mutex gLogMutex;
+
+static void logVerbose(const char* verb, const std::filesystem::path& path) {
+    if (gVerbose) {
+        std::lock_guard<std::mutex> lock(gLogMutex);
+        std::cout << verb << " " << path << "..." << std::endl;
+    }
+}
+
+static void runJob(AssetJob& job, const std::vector<char>& baserom,
+                   const std::filesystem::file_time_type& configModified) {
+    std::unique_ptr<BaseAsset>& assetHandler = job.handler;
+    switch (gMode) {
+        case EXTRACT:
+            if (shouldExtractAsset(assetHandler->getPath(), configModified)) {
+                logVerbose("Extracting", assetHandler->getPath());
+                extractAsset(assetHandler, baserom);
+            }
+            break;
+        case CONVERT:
+            if (!std::filesystem::exists(assetHandler->getBuildPath())) {
+                std::lock_guard<std::mutex> lock(gLogMutex);
+                std::cerr << "Error: Extracted binary file " << assetHandler->getBuildPath()
+                          << " does not exist. Run `make` first." << std::endl;
+                std::exit(1);
+            }
+            if (shouldConvertAsset(assetHandler)) {
+                logVerbose("Converting", assetHandler->getAssetPath());
+                convertAsset(assetHandler, baserom);
+            }
+            break;
+        case BUILD:
+            if (!std::filesystem::exists(assetHandler->getAssetPath())) {
+                std::lock_guard<std::mutex> lock(gLogMutex);
+                std::cerr << "Error: Extracted asset file " << assetHandler->getAssetPath()
+                          << " does not exist. Run `make extractassets` first." << std::endl;
+                std::exit(1);
+            }
+            if (shouldBuildAsset(assetHandler)) {
+                logVerbose("Building", assetHandler->getAssetPath());
+                buildAsset(assetHandler);
+            }
+            break;
+    }
+}
+
+static unsigned jobThreadCount() {
+    if (const char* env = std::getenv("TMC_ASSET_JOBS")) {
+        const int n = std::atoi(env);
+        if (n > 0) {
+            return static_cast<unsigned>(n);
+        }
+    }
+    const unsigned hw = std::thread::hardware_concurrency();
+    return hw > 0 ? hw : 1;
+}
+
+void runJobs(std::vector<AssetJob>& jobs, const std::vector<char>& baserom,
+             const std::filesystem::file_time_type& configModified) {
+    // Group jobs that share any file (raw, editable or built) so they never run
+    // concurrently; a group keeps config order. Union-find over job indices.
+    std::vector<size_t> parent(jobs.size());
+    for (size_t i = 0; i < parent.size(); i++) {
+        parent[i] = i;
+    }
+    auto find = [&](size_t i) {
+        while (parent[i] != i) {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        return i;
+    };
+    std::map<std::string, size_t> owner;
+    for (size_t i = 0; i < jobs.size(); i++) {
+        for (const auto& p : { jobs[i].handler->getPath(), jobs[i].handler->getAssetPath(),
+                               jobs[i].handler->getBuildPath() }) {
+            auto [it, inserted] = owner.emplace(p.lexically_normal().generic_string(), i);
+            if (!inserted) {
+                const size_t a = find(it->second), b = find(i);
+                if (a != b) {
+                    parent[std::max(a, b)] = std::min(a, b);
+                }
+            }
+        }
+    }
+    std::map<size_t, std::vector<size_t>> grouped;
+    for (size_t i = 0; i < jobs.size(); i++) {
+        grouped[find(i)].push_back(i); // indices ascend, so each group stays in config order
+    }
+    std::vector<std::vector<size_t>> groups;
+    groups.reserve(grouped.size());
+    for (auto& entry : grouped) {
+        groups.push_back(std::move(entry.second));
+    }
+
+    const unsigned threadCount = std::min<unsigned>(jobThreadCount(), static_cast<unsigned>(groups.size()));
+    if (threadCount <= 1) {
+        for (const auto& group : groups) {
+            for (size_t i : group) {
+                runJob(jobs[i], baserom, configModified);
+            }
+        }
+        return;
+    }
+    std::atomic<size_t> next{ 0 };
+    std::vector<std::thread> workers;
+    workers.reserve(threadCount);
+    for (unsigned t = 0; t < threadCount; t++) {
+        workers.emplace_back([&]() {
+            for (size_t g = next++; g < groups.size(); g = next++) {
+                for (size_t i : groups[g]) {
+                    runJob(jobs[i], baserom, configModified);
+                }
+            }
+        });
+    }
+    for (auto& worker : workers) {
+        worker.join();
+    }
 }
