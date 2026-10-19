@@ -61,6 +61,13 @@ SHA1_TO_VERSION = {
 W = 64
 USE_UNICODE_UI = PLATFORM != "Windows"
 
+# Messages also carry Unicode (e.g. "→" in paths). With stdout redirected on
+# Windows, Python encodes with the locale code page (cp1252) and the print
+# raises mid-build. Degrade to "?" instead.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
+
 def _ui_char(unicode_ch: str, ascii_ch: str) -> str:
     return unicode_ch if USE_UNICODE_UI else ascii_ch
 

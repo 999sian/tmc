@@ -443,7 +443,7 @@ task("extract_assets")
         -- Run asset_processor extract
         print("[3/3] Running asset_processor extract (verbose mode)...")
         print("-------------------------------------------")
-        os.execv("tools/bin/asset_processor", {"-v", "extract", game_version, build_assets_dir})
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), {"-v", "extract", game_version, build_assets_dir})
         print("-------------------------------------------")
         
         print("===========================================")
@@ -483,7 +483,7 @@ task("convert_assets")
         -- Run asset_processor convert
         print("[3/3] Running asset_processor convert (verbose mode)...")
         print("-------------------------------------------")
-        os.execv("tools/bin/asset_processor", {"-v", "convert", game_version, build_assets_dir})
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), {"-v", "convert", game_version, build_assets_dir})
         print("-------------------------------------------")
         
         print("===========================================")
@@ -514,7 +514,7 @@ task("build_assets")
         os.mkdir(build_assets_dir)
         
         -- Run asset_processor build
-        os.execv("tools/bin/asset_processor", {"build", game_version, build_assets_dir})
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), {"build", game_version, build_assets_dir})
         
         print("Assets built to " .. build_assets_dir)
     end)
