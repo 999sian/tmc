@@ -2,6 +2,21 @@
 
 Reviewed all 11 open PRs against their exact recorded heads and scanned high-risk runtime code at master `bd06a6391`, including the local HD dialogue/menu/capture changes. This is a focused review, not an exhaustive audit. No source fixes, merges, settings changes or GitHub comments were made. Reproduction files remain in `/tmp/tmc-pr-review/`; all fault injection used scratch files, never player saves.
 
+## Release 0.9.6 remediation
+
+The findings below are the historical review. All ten have been addressed on the release integration branch:
+
+- R1: atomic checked disk replacement; failed saves propagate to Save & Quit, menus and F-key feedback.
+- R2: exact graphics replacement sizes and complete destination allocation bounds.
+- R3: sidecar override counts validated independently of logic mode.
+- PR1: symlink-safe extraction cleanup.
+- PR2: CMake links the embedded converter implementations.
+- PR3: versioned runtime cache invalidation and extractor-aware staging fingerprints.
+- PR4/PR5: strict tour input validation, capture errors and bounded waits.
+- PR6/PR7: upper-layer fade height and full deferred-shadow coordinates.
+
+All 11 reviewed PR heads are integrated. Follow-up review also covered F5 error feedback and the desktop archive payload. Desktop archives and Android startup now stage the public shape/logic defaults. Focused regression tests cover the fixes, including disk-failure injection and ASan/UBSan bounds checks. Full USA packaging, debug/randomizer tests and the two-scene PPU parity gate passed locally. Platform CI and presentation checks are recorded in the release PR. Regional playthroughs and Android device QA remain outside this review.
+
 ## Highest-priority runtime findings
 
 ### R1 — P1: failed quicksave overwrite destroys the previous disk snapshot

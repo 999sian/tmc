@@ -13,6 +13,8 @@
 - Experimental 3D view draws entities beyond the original GBA bounds, keeps their
   wide-view shadows aligned, reduces scrolling flicker and uses the correct
   upper-layer height for wall fading. Default tile shapes ship with the game.
+- Release archives include public randomizer logic and tile shapes; Android stages
+  missing defaults into its writable data directory while preserving edits.
 - Room-capture tours validate their inputs, report capture failures and permit
   long tours while retaining per-view timeouts.
 - Optional HD dialogue smooths contours from the original ROM glyphs at window
