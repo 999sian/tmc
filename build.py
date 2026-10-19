@@ -696,7 +696,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
                 # --loose-assets triggers pak mode), so a subsequent
                 # warm-launch of build/pc/tmc_pc skips re-extraction
                 # via the ROM-fingerprint fast path.
-                run_cmd([extractor, "--pak"], cwd=REPO_ROOT)
+                run_cmd([extractor, "--pak"] + ([] if assets_ready else ["--force"]), cwd=REPO_ROOT)
             except RuntimeError:
                 warn("asset_extractor failed — runtime assets may be incomplete")
         else:

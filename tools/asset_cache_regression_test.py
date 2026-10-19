@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Standalone asset cleanup/cache checks; no ROM, game build, or live saves."""
+import ast
 import importlib.util
 from pathlib import Path
 import re
@@ -91,6 +92,17 @@ int main(int argc, char** argv) {
                     before = build._assets_fingerprint('USA')
                     (root / name).write_text('changed')
                     self.assertNotEqual(before, build._assets_fingerprint('USA'), name)
+
+    def test_developer_cache_refresh(self):
+        tree = ast.parse((ROOT / 'build.py').read_text())
+        call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name) and node.func.id == 'run_cmd'
+                    and node.args and any(isinstance(arg, ast.Name) and arg.id == 'extractor'
+                                          for arg in ast.walk(node.args[0])))
+        args = compile(ast.Expression(call.args[0]), 'extractor command', 'eval')
+        for ready in (False, True):
+            command = eval(args, {'extractor': 'extractor', 'assets_ready': ready})
+            self.assertEqual('--force' in command, not ready)
 
     def test_regional_cache_invalidation(self):
         with tempfile.TemporaryDirectory(prefix='tmc-dist-cache-') as directory:
