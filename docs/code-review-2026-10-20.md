@@ -15,7 +15,7 @@ The findings below are the historical review. All ten have been addressed on the
 - PR4/PR5: strict tour input validation, capture errors and bounded waits.
 - PR6/PR7: upper-layer fade height and full deferred-shadow coordinates.
 
-All 11 reviewed PR heads are integrated. Follow-up review also covered F5 error feedback and the desktop archive payload. Desktop archives and Android startup now stage the public shape/logic defaults. Focused regression tests cover the fixes, including disk-failure injection and ASan/UBSan bounds checks. Full USA packaging, debug/randomizer tests and the two-scene PPU parity gate passed locally. Platform CI and presentation checks are recorded in the release PR. Regional playthroughs and Android device QA remain outside this review.
+All 11 reviewed PR heads are integrated. Follow-up review also covered F5 error feedback and the desktop archive payload. Desktop archives and Android startup now stage the public shape/logic defaults. Focused regression tests cover the fixes, including disk-failure injection and ASan/UBSan bounds checks. Full USA packaging, debug/randomizer tests and the two-scene PPU parity gate passed locally. All 18 software scene captures (original/widescreen/HD) and six Vulkan HD presentation captures repeated with matching hashes using separate local 384-width baselines. A real one-view room-capture tour completed. Platform CI is pending: GitHub suspended Actions on this fork due to usage and rejects dispatches with HTTP 422; see release PR #222. Regional playthroughs and Android device QA remain outside this review.
 
 ## Highest-priority runtime findings
 

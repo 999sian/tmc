@@ -39,7 +39,9 @@ capture support fails the run instead of silently falling back to base pixels.
 The committed presentation hashes were captured with the USA ROM, software
 renderer, a build using the original 240-pixel PPU width, and a 960×540 window
 for enhanced profiles. GPU, wider PPU builds, other regions and other platforms
-need their own reviewed baselines.
+need their own reviewed baselines. On a tiling desktop, use an isolated X11
+display for GPU comparisons: the compositor can resize Wayland capture windows,
+changing both presentation dimensions and the visible game width.
 
 The tab-separated `tools/render_scenes.tsv` corpus includes file select (two
 frames), Hyrule Field, the inventory menu, and a sword item message at both the
