@@ -23,6 +23,7 @@
 #include "main.h"        /* Main / gMain */
 #include "room.h"        /* RoomControls / RoomHeader / gRoomControls */
 #include "transitions.h" /* Transition / RoomTransition / gRoomTransition */
+#include "map.h"         /* MapLayer / gMapTop / gMapBottom */
 #include "item_ids.h"
 #include "flags.h"        /* FIGURE_ALLCOMP */
 #include "port_debug_actions.h"
@@ -45,6 +46,8 @@ RoomControls gRoomControls;
 RoomTransition gRoomTransition;
 RoomHeader* gAreaRoomHeaders[0x90];
 Hitbox gPlayerHitbox;
+MapLayer gMapTop;
+MapLayer gMapBottom;
 
 bool32 SetAffineInfo(Entity* entity, u32 x, u32 y, u32 z) { (void)entity; (void)x; (void)y; (void)z; return 0; }
 void PlayerSetNormalAndCollide(void) {}
