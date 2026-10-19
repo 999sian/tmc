@@ -119,6 +119,18 @@ static void DrawRibbonDisplayTab(void) {
                        },
                        Port_Config_CycleVoxelPitch);
             ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("3D walls out of the way");
+            ImGui::TableSetColumnIndex(1);
+            {
+                bool wf = Port_Config_GetVoxelWallFade();
+                if (ImGui::Checkbox("##voxel_wall_fade", &wf))
+                    Port_Config_SetVoxelWallFade(wf);
+            }
+            RandoUi_HelpTooltip(
+                "A wall standing between the camera and Link or an enemy thins "
+                "to a dither around them, so they stay in sight from any camera "
+                "angle.");
+            ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0); ImGui::Text("3D wall height");
             ImGui::TableSetColumnIndex(1);
             {

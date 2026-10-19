@@ -46,6 +46,8 @@ bool Port_Config_GetShowFps(void);
 void Port_Config_SetShowFps(bool on);
 bool Port_Config_GetVoxelView(void);
 void Port_Config_SetVoxelView(bool on);
+bool Port_Config_GetVoxelWallFade(void);
+void Port_Config_SetVoxelWallFade(bool on);
 int Port_Config_GetVoxelPitch(void);
 void Port_Config_CycleVoxelPitch(int dir);
 bool Port_Config_PortSettingsMenuEnabled(void);
