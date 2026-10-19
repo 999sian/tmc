@@ -450,7 +450,13 @@ task("extract_assets")
         -- Run asset_processor extract
         print("[3/3] Running asset_processor extract (verbose mode)...")
         print("-------------------------------------------")
-        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), {"-v", "extract", game_version, build_assets_dir})
+        -- TMC_ASSET_FORCE_EXTRACT=1 re-extracts every file, even ones that look
+        -- up to date (build.py sets it when the asset inputs changed).
+        local extract_args = {"-v", "extract", game_version, build_assets_dir}
+        if os.getenv("TMC_ASSET_FORCE_EXTRACT") == "1" then
+            table.insert(extract_args, 1, "-f")
+        end
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), extract_args)
         print("-------------------------------------------")
         
         print("===========================================")

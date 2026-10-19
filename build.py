@@ -487,6 +487,22 @@ def stage_rando_logic(dist_dir: Path) -> None:
     shutil.copy2(source, target)
     ok(f"default.logic → {target.relative_to(REPO_ROOT)}")
 
+def _assets_fingerprint(version: str) -> str:
+    """Hash of everything the xmake extract/convert/build_assets tasks read:
+    the verified ROM (identified by its expected SHA1), the asset JSON
+    descriptions, and the sources of asset_processor plus the converters it
+    shells out to. Game code is not an input, so code-only rebuilds can reuse
+    build/<version>/assets."""
+    h = hashlib.sha1()
+    h.update(f"{version}:{VERSIONS[version]['sha1']}\n".encode())
+    inputs = sorted((REPO_ROOT / "assets").glob("*.json"))
+    for tool in ("asset_processor", "gbagfx", "aif2pcm", "mid2agb", "agb2mid", "util"):
+        inputs += sorted(p for p in (REPO_ROOT / "tools" / "src" / tool).rglob("*") if p.is_file())
+    for p in inputs:
+        h.update(p.relative_to(REPO_ROOT).as_posix().encode() + b"\0")
+        h.update(p.read_bytes())
+    return h.hexdigest()
+
 def build_version(version: str, env: dict, non_interactive: bool = False,
                   slim: bool = False, multi_region: bool = True) -> Optional[Path]:
     """Build tmc_pc for `version` and stage it under dist/<version>/.
@@ -563,8 +579,10 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     configure_cmd.append("--repro_harness=y")
 
     assets_dir = REPO_ROOT / "build" / version / "assets"
-    assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
-    assets_ready = assets_dir.exists() and assets_src_dir.exists()
+    assets_stamp = REPO_ROOT / "build" / version / ".assets_fingerprint"
+    assets_fingerprint = _assets_fingerprint(version)
+    assets_ready = (assets_dir.exists() and assets_stamp.exists()
+                    and assets_stamp.read_text().strip() == assets_fingerprint)
 
     steps = [
         (f"Configure ({version})", configure_cmd),
@@ -577,8 +595,14 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     if slim:
         info("Slim build — skipping xmake extract_assets/convert_assets/build_assets.")
     elif assets_ready:
-        info("Assets already exist in build/<version>/assets and build/<version>/assets_src — skipping extract/convert/build_assets.")
+        info("Assets up to date (same ROM, asset JSON and asset tool sources) — skipping extract/convert/build_assets.")
     else:
+        if assets_stamp.exists():
+            assets_stamp.unlink()
+        # Re-extract every file: extraction skips files that already exist, so a
+        # stale or corrupted one (e.g. a dungeon map from the old text-mode write)
+        # would otherwise survive the input change.
+        env = dict(env, TMC_ASSET_FORCE_EXTRACT="1")
         steps.extend([
             ("Extract assets",              ["xmake", "extract_assets"]),
             ("Convert assets",              ["xmake", "convert_assets"]),
@@ -595,6 +619,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         except RuntimeError as exc:
             err(str(exc))
             return None
+        if label == "Build assets":
+            assets_stamp.write_text(assets_fingerprint + "\n")
 
     if not slim:
         # Copy ROM so the standalone asset_extractor can find it next
@@ -689,11 +715,17 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
     # A previous dist may contain a user-edited logic file or additional
     # randomizer files. Keep that directory across the ROM asset refresh.
-    rando_dst = dist_dir / "assets" / "rando"
-    with tempfile.TemporaryDirectory(prefix="tmc-rando-assets-") as backup_dir:
-        rando_backup = Path(backup_dir) / "rando"
-        if rando_dst.is_dir():
-            shutil.copytree(rando_dst, rando_backup)
+    # Also keep tmc_pc's per-region runtime caches (assets/<region>/ and
+    # assets_src/<region>/): wiping them made the first launch after every
+    # full build re-extract. tmc_pc still re-extracts on its own when a cache
+    # is stale (ROM size/mtime or extractor version in .asset_build_state.json).
+    kept = [Path("assets") / "rando"] + [
+        Path(tree) / region for tree in ("assets", "assets_src") for region in ("usa", "eu", "jp")
+    ]
+    with tempfile.TemporaryDirectory(prefix="tmc-dist-keep-") as backup_dir:
+        for rel in kept:
+            if (dist_dir / rel).is_dir():
+                shutil.copytree(dist_dir / rel, Path(backup_dir) / rel)
         for src_name in ("assets", "assets_src"):
             src = REPO_ROOT / "build" / version / src_name
             dst = dist_dir / src_name
@@ -704,8 +736,9 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
                 ok(f"{src_name}/  →  dist/{version}/{src_name}/")
             else:
                 warn(f"build/{version}/{src_name}/ not found — skipping")
-        if rando_backup.is_dir():
-            shutil.copytree(rando_backup, rando_dst, dirs_exist_ok=True)
+        for rel in kept:
+            if (Path(backup_dir) / rel).is_dir():
+                shutil.copytree(Path(backup_dir) / rel, dist_dir / rel, dirs_exist_ok=True)
     stage_rando_logic(dist_dir)
 
     sounds_src = REPO_ROOT / "assets" / "sounds.json"
