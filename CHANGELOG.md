@@ -1,7 +1,20 @@
 # Changelog
 
-## Unreleased
+## v0.9.6 (2026-10-20)
 
+- Quicksaves replace disk snapshots atomically and preserve the previous save
+  when writes fail. Save & Quit stays open and reports failure instead of exiting.
+- Reject malformed randomizer sidecars and incorrectly sized graphics mods before
+  they can overwrite memory.
+- Integrate the launcher skip option, Windows asset-tool fixes, duplicate asset
+  handling, parallel converters, faster extraction and cache-aware rebuilds.
+  Converter embedding also works through the CMake tools build. Extraction keeps
+  symlink targets safe and refreshes old regional caches after pipeline changes.
+- Experimental 3D view draws entities beyond the original GBA bounds, keeps their
+  wide-view shadows aligned, reduces scrolling flicker and uses the correct
+  upper-layer height for wall fading. Default tile shapes ship with the game.
+- Room-capture tours validate their inputs, report capture failures and permit
+  long tours while retaining per-view timeouts.
 - Optional HD dialogue smooths contours from the original ROM glyphs at window
   resolution, preserving lettering, layout and reveal timing. Enable it in
   F8 → Display; unsupported text effects retain their original rendering.
