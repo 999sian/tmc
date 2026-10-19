@@ -9,6 +9,9 @@ from voxel_regression_test import function
 
 ROOT = Path(__file__).resolve().parent.parent
 source = (ROOT / 'port/port_imgui_menu.cpp').read_text()
+bios = (ROOT / 'port/port_bios.c').read_text()
+f5 = bios.split('if (e.key.key == SDLK_F5) {', 1)[1].split('continue;', 1)[0]
+assert 'if (!Port_QuickSave())' in f5 and 'Port_DebugMenu_ToastFromExternal' in f5
 fixture = '''#include <cassert>
 #include <cstring>
 struct ImVec2 { float x,y; ImVec2(float a,float b):x(a),y(b){} };

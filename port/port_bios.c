@@ -377,7 +377,8 @@ static void Port_PumpEvents(void) {
             }
             if (e.key.key == SDLK_F5) {
                 extern int Port_QuickSave(void);
-                Port_QuickSave();
+                if (!Port_QuickSave())
+                    Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
                 continue;
             }
             if (e.key.key == SDLK_F6) {
