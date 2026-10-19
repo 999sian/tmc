@@ -19,6 +19,21 @@ while (vparts.size() < 4) vparts << 0
 def tmcVersionCode = Math.max(1,
     vparts[0] * 1000000 + vparts[1] * 10000 + vparts[2] * 100 + vparts[3])
 
+// Only public defaults belong in the APK; ROM-derived assets are extracted on device.
+def publicDefaultsDir = layout.buildDirectory.dir("generated/publicDefaults")
+def stagePublicDefaults = tasks.register("stagePublicDefaults", Sync) {
+    into(publicDefaultsDir)
+    from("${rootDir}/../assets") {
+        include "voxel_shapes.json"
+        into("defaults")
+    }
+    from("${rootDir}/../assets") {
+        include "rando/default.logic"
+        into("defaults/assets")
+    }
+}
+tasks.named("preBuild").configure { dependsOn(stagePublicDefaults) }
+
 android {
     namespace "dev.picori.tmc"
     compileSdk 34
@@ -40,6 +55,7 @@ android {
             // xmake drops libmain.so into build/android/<abi>/ at repo root;
             // point jniLibs straight at it so there is no copy step to forget.
             jniLibs.srcDirs = ["${rootDir}/../build/android"]
+            assets.srcDir(publicDefaultsDir)
         }
     }
 

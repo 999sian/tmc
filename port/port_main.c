@@ -333,6 +333,32 @@ static void PaintSplash(SDL_Window* window, const char* msg) {
  * include renames main -> SDL_main. Only defined in this TU. */
 #include <SDL3/SDL_main.h>
 #include <unistd.h>
+
+static void Port_AndroidStageDefaults(void) {
+    const char* paths[] = { "voxel_shapes.json", "assets/rando/default.logic" };
+    if (!SDL_CreateDirectory("assets/rando")) {
+        fprintf(stderr, "[android] cannot create defaults directory: %s\n", SDL_GetError());
+        return;
+    }
+    for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+        if (SDL_GetPathInfo(paths[i], NULL))
+            continue;
+        char source[128];
+        snprintf(source, sizeof(source), "defaults/%s", paths[i]);
+        size_t size;
+        // SDL reads APK assets; the existing loaders need ordinary writable files.
+        void* data = SDL_LoadFile(source, &size);
+        if (!data) {
+            fprintf(stderr, "[android] cannot load %s: %s\n", source, SDL_GetError());
+            continue;
+        }
+        if (!SDL_SaveFile(paths[i], data, size)) {
+            fprintf(stderr, "[android] cannot stage %s: %s\n", paths[i], SDL_GetError());
+            SDL_RemovePath(paths[i]); // Retry an incomplete copy on the next launch.
+        }
+        SDL_free(data);
+    }
+}
 #endif
 
 int main(int argc, char* argv[]) {
@@ -394,6 +420,7 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+    Port_AndroidStageDefaults();
 #endif
 
     fprintf(stderr, "Initializing port layer...\n");
