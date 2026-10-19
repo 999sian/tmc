@@ -8,9 +8,11 @@
 #include <nlohmann/json.hpp>
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <system_error>
+#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -141,6 +143,12 @@ void WipeStaleRuntime(const std::filesystem::path& runtime_root, bool pack_runti
 }
 
 } // namespace
+
+std::filesystem::path DeletingPathFor(const std::filesystem::path& editable_root) {
+    std::filesystem::path trash = editable_root;
+    trash += ".deleting";
+    return trash;
+}
 
 std::filesystem::path FindExecutableDirectory(const std::filesystem::path& argv0) {
     /* Prefer the OS-provided "where am I" mechanism over argv[0]: under some
@@ -360,7 +368,18 @@ bool ExtractAssets(const Options& opt, std::string* error) {
     config.outputRoot = opt.editable_root;
     config.runtimeOutputRoot = opt.runtime_root;
 
+    auto tmark = std::chrono::steady_clock::now();
+    auto tlog = [&](const char* what) {
+        if (std::getenv("TMC_EXTRACT_TIMING")) {
+            const auto now = std::chrono::steady_clock::now();
+            std::fprintf(stderr, "[extract-timing] %s: %lld ms\n", what,
+                         static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(now - tmark).count()));
+            tmark = now;
+        }
+    };
+    tlog("setup");
     WipeStaleRuntime(opt.runtime_root, opt.pack_runtime);
+    tlog("wipe stale runtime");
 
     PakBuilderArray pak_builders;
     if (opt.pack_runtime) {
@@ -369,12 +388,14 @@ bool ExtractAssets(const Options& opt, std::string* error) {
     }
 
     extract_assets(config);
+    tlog("extract_assets");
 
     /* Drain BackgroundWriter so all aggregate JSON writes are flushed
      * before we record the build state or hand off to BuildRuntimeAssets. */
     try {
         PortAssetLog::BackgroundWriter::Instance().Wait();
     } catch (const std::exception& e) { return fail(fmt::format("background JSON writer failed: {}", e.what())); }
+    tlog("background writer drain");
 
     if (opt.pack_runtime) {
         const auto& names = pak_category_names();
@@ -407,15 +428,48 @@ bool ExtractAssets(const Options& opt, std::string* error) {
         if (!PortAssetPipeline::BuildRuntimeAssets(opt.editable_root, opt.runtime_root, &build_error)) {
             return fail(fmt::format("failed to build runtime assets: {}", build_error));
         }
-    } else if (!PortAssetPipeline::WriteBuildStateFile(opt.editable_root, opt.runtime_root, &build_error)) {
+    } else if (!PortAssetPipeline::WriteBuildStateFile(opt.editable_root, opt.runtime_root, &build_error,
+                                                        /*listSources=*/!opt.runtime_only)) {
         return fail(fmt::format("failed to write build state: {}", build_error));
     }
 
+    tlog("paks + build state");
     StampRomFingerprint(opt.runtime_root, rom_fp, opt.pack_runtime);
 
-    if (opt.runtime_only) {
+    std::error_code rename_ec{ std::make_error_code(std::errc::operation_not_permitted) };
+    if (opt.runtime_only && opt.background_cleanup) {
+        /* Rename is instant and nothing looks for "<region>.deleting", so the
+         * game can start while a background thread deletes the ~24k files.
+         * A leftover from a run that exited mid-delete is removed by
+         * Port_EnsureAssetsReadyWithDisplay on the next launch. */
+        const std::filesystem::path trash = DeletingPathFor(opt.editable_root);
+        std::filesystem::remove_all(trash, rename_ec);
+        std::filesystem::rename(opt.editable_root, trash, rename_ec);
+        if (!rename_ec) {
+            std::thread([trash]() {
+                std::error_code ec;
+                std::filesystem::remove_all(trash, ec);
+            }).detach();
+            tlog("move editable tree aside (runtime_only, deleted in background)");
+        }
+    }
+    if (opt.runtime_only && rename_ec) {
+        /* ~24k files: delete them in parallel, then the now-empty directories.
+         * Finished before we return, so nothing ever sees a half-deleted tree. */
+        std::vector<std::filesystem::path> files;
         std::error_code ec;
+        for (auto it = std::filesystem::recursive_directory_iterator(opt.editable_root, ec);
+             !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            if (it->is_regular_file(ec)) {
+                files.push_back(it->path());
+            }
+        }
+        PortAssetLog::ParallelFor<std::size_t>(0, files.size(), [&](std::size_t i) {
+            std::error_code rm_ec;
+            std::filesystem::remove(files[i], rm_ec);
+        });
         std::filesystem::remove_all(opt.editable_root, ec);
+        tlog("remove editable tree (runtime_only)");
     }
 
     const auto t1 = std::chrono::steady_clock::now();

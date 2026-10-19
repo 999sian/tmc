@@ -62,6 +62,7 @@ class Reporter
     std::size_t total_{0};
     std::atomic<std::size_t> count_{0};
     std::chrono::steady_clock::time_point last_redraw_{};
+    std::chrono::steady_clock::time_point phase_start_{};
     bool phase_active_{false};
 
     ProgressCallback progress_cb_;

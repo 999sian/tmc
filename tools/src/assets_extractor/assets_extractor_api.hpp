@@ -29,9 +29,16 @@ struct Options {
     std::filesystem::path editable_root;
     std::filesystem::path runtime_root;
 
-    /* Skip writing the assets_src/ tree. Saves ~150 ms but breaks
-     * round-tripping through the editable JSONs. */
+    /* Don't keep the assets_src/ tree: it is still written during
+     * extraction, then removed. Breaks round-tripping through the
+     * editable JSONs. */
     bool runtime_only = false;
+
+    /* With runtime_only: rename the editable tree aside and delete it on a
+     * background thread instead of before returning (deleting ~24k files
+     * takes seconds on Windows). For long-lived callers (tmc_pc); a CLI
+     * that exits right away should leave this false. */
+    bool background_cleanup = false;
 
     /* Pack runtime assets into .pak archives instead of writing
      * thousands of loose files. Defaults to true inside tmc_pc;
@@ -57,6 +64,9 @@ struct Options {
 /* Returns true on success. On failure, *error (if non-null) receives
  * a human-readable description suitable for an SDL message box. */
 bool ExtractAssets(const Options& opt, std::string* error);
+
+/* Where background_cleanup moves the editable tree before deleting it. */
+std::filesystem::path DeletingPathFor(const std::filesystem::path& editable_root);
 
 /* Fast path the engine can call before showing the progress bar:
  * peek at runtime_root/.asset_build_state.json and compare the
