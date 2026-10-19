@@ -709,6 +709,8 @@ target("tmc_pc")
     add_files("port/port_runtime_config.cpp")
     add_files("port/port_debug_menu.cpp")
     add_files("port/port_imgui_menu.cpp")
+    add_files("port/port_hd_text.cpp")
+    add_files("port/port_menu_background.c", "port/port_menu_background_imgui.cpp")
     add_files("port/port_level_editor.cpp")
     add_files("port/port_prelaunch_logo.cpp")
     -- Embed docs/picori-logo.png into the binary so the prelaunch

@@ -279,6 +279,37 @@ bool Message_GetWindowRect(int* x, int* y, int* width, int* height) {
     *height = (gCurrentWindow.height + 2) * 8;
     return true;
 }
+
+bool Message_CopyTextCanvas(u8* pixels, int capacity, int* x, int* y, int* width, int* height) {
+    int row, col;
+    if (!pixels || !gCurrentWindow.active || gTextRender._98.bytes.sizeScale != 8 ||
+        gCurrentWindow.width == 0 || gCurrentWindow.width > 26 || gCurrentWindow.height != 4 ||
+        gCurrentWindow.xPos + gCurrentWindow.width + 1 > 32 ||
+        gCurrentWindow.yPos + 5 > 32 || gScreen.bg0.xOffset != 0 || gScreen.bg0.yOffset != 0)
+        return false;
+    *x = (gCurrentWindow.xPos + 1) * 8;
+    *y = (gCurrentWindow.yPos + 1) * 8;
+    *width = gCurrentWindow.width * 8;
+    *height = 32;
+    if (capacity < *width * *height)
+        return false;
+    for (row = 0; row < 4; ++row) {
+        for (col = 0; col < gCurrentWindow.width; ++col) {
+            u16 attr = gBG0Buffer[(gCurrentWindow.yPos + 1 + row) * 32 + gCurrentWindow.xPos + 1 + col];
+            unsigned tile = attr & 0x3ff;
+            int px, py;
+            if ((attr >> 12) != MESSAGE_PALETTE || (attr & 0xc00) || tile < 0x82 || tile >= 0xea)
+                return false;
+            for (py = 0; py < 8; ++py) {
+                for (px = 0; px < 8; ++px) {
+                    u8 packed = *(const u8*)gba_MemPtr(0x0600C000 + tile * 32 + py * 4 + px / 2);
+                    pixels[(row * 8 + py) * *width + col * 8 + px] = (packed >> ((px & 1) * 4)) & 15;
+                }
+            }
+        }
+    }
+    return true;
+}
 #endif
 
 typedef struct {

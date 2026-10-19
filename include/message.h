@@ -28,6 +28,8 @@ extern Message gMessage;
 #ifdef PC_PORT
 /* Pixel rectangle of the current BG0 frame, including its border. */
 bool Message_GetWindowRect(int* x, int* y, int* width, int* height);
+/* Fully open, opaque dialogue canvas as palette indices; false means fallback. */
+bool Message_CopyTextCanvas(u8* pixels, int capacity, int* x, int* y, int* width, int* height);
 #endif
 
 typedef struct {

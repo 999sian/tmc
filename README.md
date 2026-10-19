@@ -192,6 +192,23 @@ the GPU options are present but show "GPU backend required". On macOS the GPU
 backend uses Metal for the stock filters; runtime `.glslp` shader presets still
 require the SPIR-V/Vulkan backend.
 
+**F8 → Display → HD dialogue (original glyphs)** optionally draws smooth
+contours from the ROM's original lettering at the window's resolution. It
+preserves the game's text layout and reveal timing without replacing its font.
+It is off by default. Small windows, scrolling, translucent or obscured text,
+and unsupported dialogue layouts retain the original rendering.
+
+**Widescreen menu artwork** extends the decorative backgrounds of file select,
+Items, Quest Status, Kinstones and Sword Techniques into the side margins.
+It requires widescreen to be enabled; the original menu content stays centered.
+Other screens retain the selected background fill. LCD persistence disables
+the decoration. Presentation filters, custom shader presets, the experimental
+3D view and Console-Parity retain the original presentation instead of applying
+these overlays.
+
+Named dialogue and menu rendering checks are documented in
+[docs/render-scene-checks.md](docs/render-scene-checks.md).
+
 ## Accessibility
 
 The port has built-in text-to-speech for screen-reader users. Press **F7** to

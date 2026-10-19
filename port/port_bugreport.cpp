@@ -184,6 +184,32 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
     return true;
 }
 
+extern "C" bool Port_WriteSurfacePNG(SDL_Surface* surface, const char* path) {
+    SDL_Surface* rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+    if (!rgba)
+        return false;
+    FILE* fp = std::fopen(path, "wb");
+    png_structp png = fp ? png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr) : nullptr;
+    png_infop info = png ? png_create_info_struct(png) : nullptr;
+    bool ok = false;
+    if (info && !setjmp(png_jmpbuf(png))) {
+        png_init_io(png, fp);
+        png_set_IHDR(png, info, rgba->w, rgba->h, 8, PNG_COLOR_TYPE_RGBA,
+                     PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+        png_write_info(png, info);
+        for (int y = 0; y < rgba->h; ++y)
+            png_write_row(png, (png_bytep)rgba->pixels + (size_t)y * rgba->pitch);
+        png_write_end(png, nullptr);
+        ok = true;
+    }
+    if (png)
+        png_destroy_write_struct(&png, info ? &info : nullptr);
+    if (fp && std::fclose(fp) != 0)
+        ok = false;
+    SDL_DestroySurface(rgba);
+    return ok;
+}
+
 /* Repro-harness shim (#138/#79): capture the base GBA framebuffer to an
  * explicit path, headless-safe and cross-platform (used by
  * port_repro_litarea.c on Linux and under Wine). */

@@ -51,6 +51,9 @@ extern "C" void Port_ApplyLanguage(void);
 #include "port_gpu_renderer.h"
 #include "port_voxel.h"
 #include "port_prelaunch_logo.h"
+#include "port_ppu.h"
+#include "port_hd_text.h"
+#include "port_menu_background.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h" /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"         /* Port_TTS_* — accessibility tab + focus reader */
@@ -1325,6 +1328,21 @@ extern "C" bool Port_ImGui_Render(void) {
     }
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+
+    if (!Port_Config_GetConsoleParity() && !Port_PPU_HasPresentationFilter() &&
+        !Port_GlslpRuntime_IsActive() && !Port_Config_GetVoxelView()) {
+        float stage[4], frame[4];
+        int width = 0, pitch = 0;
+        const uint32_t* pixels = Port_PPU_GetOverlayFrame(stage, frame, &width, &pitch);
+        if (pixels) {
+            if (Port_Config_GetMenuArtBackground() && Port_Config_WidescreenEnabled() &&
+                !Port_PPU_LcdPersistenceEnabled())
+                Port_MenuBackground_Render(stage[0], stage[1], stage[2], stage[3],
+                                           frame[0], frame[1], frame[2], frame[3]);
+            if (Port_Config_GetHdDialogue())
+                Port_HDText_Draw(pixels, width, 160, pitch, frame[0], frame[1], frame[2], frame[3]);
+        }
+    }
 
     /* Defensive cleanup on close-transition (open → closed). Without
      * this, ImGui can retain nav focus / active-widget references to

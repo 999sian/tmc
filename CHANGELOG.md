@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Optional HD dialogue smooths contours from the original ROM glyphs at window
+  resolution, preserving lettering, layout and reveal timing. Enable it in
+  F8 → Display; unsupported text effects retain their original rendering.
+- Supported file-select and pause-menu backgrounds continue into widescreen
+  margins using their native decorative tiles. Menu contents remain centered.
+  Both enhancements are disabled in Console-Parity mode.
+- Named rendering checks capture file select, inventory, a field and dialogue
+  at top/bottom positions, with separate original, widescreen and HD baselines.
+  Presentation capture includes overlays; failed captures cannot update goldens.
+
 ## v0.9.5 (2026-09-28)
 
 - Engine and runtime data loader modernization: all ROM symbol tables and

@@ -338,6 +338,54 @@ static void Port_PPU_ComputeViewportRects(int outW, int outH, int fbW, int fbH, 
     *frameH = fh;
 }
 
+extern "C" const uint32_t* Port_PPU_GetOverlayFrame(float stage[4], float frame[4], int* width, int* pitchPixels) {
+    int pixelW = 0, pixelH = 0, logicalW = 0, logicalH = 0;
+    if (!sWindow || !SDL_GetWindowSizeInPixels(sWindow, &pixelW, &pixelH) ||
+        !SDL_GetWindowSize(sWindow, &logicalW, &logicalH) || pixelW <= 0 || pixelH <= 0)
+        return nullptr;
+    int height, pitchBytes;
+    const uint32_t* pixels = Port_PPU_SelectPresentFrame(width, &height, &pitchBytes);
+    int sx, sy, sw, sh, fx, fy, fw, fh;
+    Port_PPU_ComputeViewportRects(pixelW, pixelH, *width, height, &sx, &sy, &sw, &sh, &fx, &fy, &fw, &fh);
+    const float scaleX = (float)logicalW / pixelW, scaleY = (float)logicalH / pixelH;
+    stage[0] = sx * scaleX; stage[1] = sy * scaleY; stage[2] = sw * scaleX; stage[3] = sh * scaleY;
+    frame[0] = fx * scaleX; frame[1] = fy * scaleY; frame[2] = fw * scaleX; frame[3] = fh * scaleY;
+    *pitchPixels = pitchBytes / (int)sizeof(uint32_t);
+    return pixels;
+}
+
+extern "C" bool Port_PPU_HasPresentationFilter(void) {
+    return sBackend == RenderBackend::Gpu ? Port_GPU_GetFilter() != PORT_GPU_FILTER_NONE : sFilter != PORT_FILTER_NONE;
+}
+
+static char sPresentationCapturePath[4096];
+static int sPresentationCaptureStatus = 1;
+extern "C" bool Port_WriteSurfacePNG(SDL_Surface* surface, const char* path);
+
+extern "C" int Port_CapturePresentationPNG(const char* path) {
+    if (!path || !*path || std::strlen(path) >= sizeof(sPresentationCapturePath))
+        return -1;
+    if (std::strcmp(path, sPresentationCapturePath) == 0)
+        return sPresentationCaptureStatus;
+    if (sPresentationCaptureStatus == 0)
+        return -1;
+    std::strcpy(sPresentationCapturePath, path);
+    sPresentationCaptureStatus = 0;
+    return 0;
+}
+
+extern "C" const char* Port_PPU_PresentationCapturePath(void) {
+    return sPresentationCaptureStatus == 0 ? sPresentationCapturePath : nullptr;
+}
+
+extern "C" void Port_PPU_CompletePresentationCapture(SDL_Surface* surface) {
+    if (sPresentationCaptureStatus == 0) {
+        sPresentationCaptureStatus = surface && Port_WriteSurfacePNG(surface, sPresentationCapturePath) ? 1 : -1;
+        if (sPresentationCaptureStatus < 0)
+            fprintf(stderr, "[capture] presentation PNG failed: %s\n", SDL_GetError());
+    }
+}
+
 static void Port_PPU_QueryOutputSize(int* outW, int* outH) {
     int w = 0;
     int h = 0;
@@ -624,6 +672,10 @@ extern "C" void Port_PPU_SetPersistence(bool enabled, float rho) {
     }
 }
 
+extern "C" bool Port_PPU_LcdPersistenceEnabled(void) {
+    return sPersistEnabled;
+}
+
 /* Colour-correct `count` ABGR8888 pixels in place via the per-channel LUT.
  * No-op when disabled. Shared by the native post-process, the GPU
  * supersample buffer (per-pixel LUT commutes with S*S replication, so applying
@@ -737,6 +789,13 @@ static int Port_CountPerfCores(void) {
 
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
+#ifdef TMC_REPRO_HARNESS
+    const char* captureWindow = std::getenv("TMC_ROOMCAP_WINDOW");
+    int captureW = 0, captureH = 0;
+    if (captureWindow && std::sscanf(captureWindow, "%d,%d", &captureW, &captureH) == 2 &&
+        captureW >= 240 && captureH >= 160 && captureW <= 7680 && captureH <= 4320)
+        SDL_SetWindowSize(window, captureW, captureH);
+#endif
 #ifdef launcher
     sBootstrapWindow = nullptr;
 #endif
@@ -1650,6 +1709,11 @@ extern "C" void Port_PPU_PresentFrame(void) {
             }
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
             Port_TouchControls_Render(sRenderer, outW, outH);
+        }
+        if (Port_PPU_PresentationCapturePath()) {
+            SDL_Surface* shot = SDL_RenderReadPixels(sRenderer, nullptr);
+            Port_PPU_CompletePresentationCapture(shot);
+            SDL_DestroySurface(shot);
         }
         if (!SDL_RenderPresent(sRenderer)) {
             /* Log throttled: a failing present on Android (EGL surface loss

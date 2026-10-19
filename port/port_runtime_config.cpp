@@ -161,6 +161,8 @@ bool sRibbonCfg = true;        /* F8 menu style: ribbon (true) vs classic */
 bool sMenuHintSeen = false;    /* set once the F8/settings menu is first opened */
 float sMasterVolume = 1.0f;    /* game master volume [0,1]; 1.0 = unchanged */
 bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
+bool sHdDialogue = false;
+bool sMenuArtBackground = true;
 bool sRollAttackMacroEnabled = true;
 bool sFullscreen = false;
 bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
@@ -293,6 +295,8 @@ const BoolCfg kBoolCfg[] = {
     { "ribbon_mode", &sRibbonCfg, true },
     { "menu_hint_seen", &sMenuHintSeen, false },
     { "hold_advance_text", &sHoldAdvanceText, false },
+    { "hd_dialogue", &sHdDialogue, false },
+    { "menu_art_background", &sMenuArtBackground, true },
     { "roll_attack_macro", &sRollAttackMacroEnabled, true },
     { "fullscreen", &sFullscreen, false },
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
@@ -1906,6 +1910,22 @@ extern "C" void Port_Config_SetMenuHintSeen(bool seen) {
 }
 extern "C" bool Port_Config_GetHoldToAdvanceText(void) {
     return sHoldAdvanceText;
+}
+extern "C" bool Port_Config_GetHdDialogue(void) {
+    return sHdDialogue && !sConsoleParity;
+}
+extern "C" void Port_Config_SetHdDialogue(bool on) {
+    sHdDialogue = on;
+    sConfigJson["hd_dialogue"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetMenuArtBackground(void) {
+    return sMenuArtBackground && !sConsoleParity;
+}
+extern "C" void Port_Config_SetMenuArtBackground(bool on) {
+    sMenuArtBackground = on;
+    sConfigJson["menu_art_background"] = on;
+    SaveConfig();
 }
 extern "C" void Port_Config_SetHoldToAdvanceText(bool on) {
     sHoldAdvanceText = on;

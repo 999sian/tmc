@@ -122,6 +122,9 @@ Warp arguments use the `area,room,x,y,layer` form (C integer literals, so
 | `TMC_ROOMCAP_WARP` | port/port_repro_roomcap.c | **(harness)** Target room for roomcap. |
 | `TMC_ROOMCAP_SETTLE` | port/port_repro_roomcap.c | **(harness)** Frames to wait after the warp before capturing (default 300). |
 | `TMC_ROOMCAP_OUT` | port/port_repro_roomcap.c | **(harness)** Output PNG path (default `roomcap.png`). |
+| `TMC_ROOMCAP_WINDOW` | port/port_ppu.cpp | **(harness)** Presentation test window `width,height` (240..7680 by 160..4320); scene runner uses `960,540`. |
+| `TMC_ROOMCAP_PRESENTATION` | port/port_repro_roomcap.c | **(harness)** Capture composed presentation, including overlays, instead of the base framebuffer. |
+| `TMC_ROOMCAP_MENU` | port/port_repro_roomcap.c | **(harness)** Open the inventory screen before room capture. |
 | `TMC_ROOMCAP_SAVE` | port/port_repro_roomcap.c | **(harness)** Write a quicksave at the warped spot and exit. |
 | `TMC_ROOMCAP_MSG` | port/port_repro_roomcap.c | **(harness)** Open message `idx[,posY]` before capturing. |
 | `TMC_ROOMCAP_MSG_ADVANCE` | port/port_repro_roomcap.c | **(harness)** Tap A to page through that message, stopping at a choice. |

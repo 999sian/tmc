@@ -24,10 +24,21 @@
 #include "message.h"    /* gMessage, MessageRequest (TMC_ROOMCAP_MSG hook) */
 #include "script.h"     /* gActiveScriptInfo, ScriptExecutionContext (TMC_ROOMCAP_PAN_PROBE) */
 #include "port_repro.h"
+#include "pauseMenu.h"
+#include "fade.h"
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
 #include "port_debug_actions.h"
 
 extern int Port_CaptureBaseFramebufferPNG(const char* path);
+extern int Port_CapturePresentationPNG(const char* path);
+
+/* Presentation readback is queued at the end of a frame; poll next tick. */
+static int RoomCap_Capture(const char* path) {
+    const char* present = getenv("TMC_ROOMCAP_PRESENTATION");
+    if (present && *present && strcmp(present, "0") != 0)
+        return Port_CapturePresentationPNG(path);
+    return Port_CaptureBaseFramebufferPNG(path) ? 1 : -1;
+}
 extern void SetActiveSave(u32 idx); /* fileselect.c (no header decl) */
 
 /* Dump the mode1 PPU memory (io/vram/bg-pltt/obj-pltt/oam) for JP-vs-USA diff. */
@@ -55,6 +66,7 @@ static void RoomCap_DumpPpu(const char* path) {
 void Port_ReproRoomCap_Tick(unsigned int frame) {
     static int active = -1;
     static int booted = 0, warp_done = 0, cap_frame = 0, settle = 300;
+    static int msg_posY = -1;
     static unsigned int a = 0x03, r = 0x08, x = 0x1d8, y = 0x138, l = 0;
 
     if (active < 0) {
@@ -72,6 +84,11 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
     }
     if (!active)
         return;
+    if (frame >= 5000) {
+        fprintf(stderr, "[roomcap] timeout (task=%u)\n", (unsigned)gMain.task);
+        fflush(stderr);
+        _Exit(3);
+    }
 
     /* Press START at the title to reach file-select. */
     if (!booted && gMain.task == TASK_TITLE && frame >= 30 && (frame & 0xF) < 3) {
@@ -85,6 +102,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
     {
         static int fsel = -1;
         static int fsel_first = 0;
+        static unsigned fsel_ready = 0;
         if (fsel < 0) {
             const char* fe = getenv("TMC_ROOMCAP_FILESELECT");
             fsel = (fe && *fe && strcmp(fe, "0") != 0) ? 1 : 0;
@@ -135,14 +153,23 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                 }
                 return;
             }
-            if (gMain.task == TASK_FILE_SELECT && frame > 200 && objon) {
+            if (gMain.task == TASK_FILE_SELECT && frame > 200 && objon && !gFadeControl.active) {
+                if (fsel_ready == 0)
+                    fsel_ready = frame;
+                /* The base framebuffer is from the preceding frame; let the fade finish. */
+                if (frame < fsel_ready + 30)
+                    return;
                 const char* base = getenv("TMC_ROOMCAP_OUT");
                 if (!base || !*base)
                     base = "fsel.png";
                 if (fsel_first == 0) {
                     char p[512];
                     snprintf(p, sizeof(p), "%s_a.png", base);
-                    int ok = Port_CaptureBaseFramebufferPNG(p);
+                    int ok = RoomCap_Capture(p);
+                    if (ok == 0)
+                        return;
+                    if (ok < 0)
+                        _Exit(2);
                     fprintf(stderr, "[roomcap-fsel] frame %u: captured %s -> %d (state=%u substate=%u)\n", frame, p, ok,
                             (unsigned)gMain.state, (unsigned)gUI.state);
                     fsel_first = (int)frame;
@@ -155,7 +182,11 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                 } else if ((int)frame >= fsel_first + 60) {
                     char p[512];
                     snprintf(p, sizeof(p), "%s_b.png", base);
-                    int ok = Port_CaptureBaseFramebufferPNG(p);
+                    int ok = RoomCap_Capture(p);
+                    if (ok == 0)
+                        return;
+                    if (ok < 0)
+                        _Exit(2);
                     fprintf(stderr, "[roomcap-fsel] frame %u: captured %s -> %d\n", frame, p, ok);
                     const char* dumpb = getenv("TMC_ROOMCAP_DUMP");
                     if (dumpb && *dumpb) {
@@ -164,13 +195,8 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                         RoomCap_DumpPpu(d);
                     }
                     fflush(stderr);
-                    _Exit(ok ? 0 : 2);
+                    _Exit(ok > 0 ? 0 : 2);
                 }
-            }
-            if (frame == 5000) {
-                fprintf(stderr, "[roomcap-fsel] timeout (task=%u)\n", (unsigned)gMain.task);
-                fflush(stderr);
-                _Exit(3);
             }
             return; /* don't fall through to the room-bootstrap path */
         }
@@ -526,6 +552,19 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         }
     }
 
+    /* Open the existing item screen after the room settles, without changing saves. */
+    {
+        static int menu_opened = 0;
+        if (getenv("TMC_ROOMCAP_MENU") && !menu_opened && warp_done && cap_frame &&
+            (int)frame >= cap_frame - settle / 2) {
+            extern void InitPauseMenu(void);
+            gPauseMenuOptions.screen = PauseMenuScreen_1;
+            InitPauseMenu();
+            menu_opened = 1;
+            fprintf(stderr, "[roomcap] opened inventory menu\n");
+        }
+    }
+
     /* TMC_ROOMCAP_MSG=<index>[,posY]: open a textbox <settle/2> frames after
      * the warp so the capture shows live dialogue (widescreen centering
      * test). Optional posY overrides the box row (1 = top-anchored). */
@@ -538,12 +577,17 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             int posY = -1;
             sscanf(m, "%i,%i", &idx, &posY);
             MessageRequest(idx);
-            if (posY >= 0)
+            if (posY >= 0) {
                 gMessage.textWindowPosY = (u8)posY;
+                msg_posY = posY;
+            }
             fprintf(stderr, "[roomcap] frame %u: opened message 0x%x posY=%d\n", frame, idx, posY);
             msg_done = 1;
             msg_opened_at = frame;
         }
+        /* Text streams can carry their own position token during initialization. */
+        if (msg_done && msg_posY >= 0)
+            gTextRender.message.textWindowPosY = (u8)msg_posY;
         /* TMC_ROOMCAP_MSG_ADVANCE=1: tap A every ~40 frames after the box
          * opens so multi-page text rolls forward — but stop on the enquiry
          * (choice) page so the capture shows the live selector instead of
@@ -570,19 +614,31 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         const char* out = getenv("TMC_ROOMCAP_OUT");
         if (!out || !*out)
             out = "roomcap.png";
-        int ok = Port_CaptureBaseFramebufferPNG(out);
+        if (getenv("TMC_ROOMCAP_MSG") && !(gMessage.state & MESSAGE_ACTIVE)) {
+            fprintf(stderr, "[roomcap] expected dialogue is not active\n");
+            _Exit(2);
+        }
+        if (msg_posY >= 0) {
+            int bx, by, bw, bh;
+            if (!Message_GetWindowRect(&bx, &by, &bw, &bh) || by != msg_posY * 8) {
+                fprintf(stderr, "[roomcap] expected dialogue anchor is not active\n");
+                _Exit(2);
+            }
+        }
+        if (getenv("TMC_ROOMCAP_MENU") &&
+            (gMain.substate != GAMEMAIN_SUBTASK || gPauseMenuOptions.screen != PauseMenuScreen_1)) {
+            fprintf(stderr, "[roomcap] expected inventory is not active\n");
+            _Exit(2);
+        }
+        int ok = RoomCap_Capture(out);
+        if (ok == 0)
+            return;
         fprintf(stderr, "[roomcap] frame %u: captured %s -> %d (area=0x%02x room=0x%02x)\n", frame, out, ok,
                 (unsigned)gRoomControls.area, (unsigned)gRoomControls.room);
         const char* dump = getenv("TMC_ROOMCAP_DUMP");
         if (dump && *dump)
             RoomCap_DumpPpu(dump);
         fflush(stderr);
-        _Exit(ok ? 0 : 2);
-    }
-
-    if (frame == 5000) {
-        fprintf(stderr, "[roomcap] timeout (booted=%d task=%u warp=%d)\n", booted, (unsigned)gMain.task, warp_done);
-        fflush(stderr);
-        _Exit(3);
+        _Exit(ok > 0 ? 0 : 2);
     }
 }
