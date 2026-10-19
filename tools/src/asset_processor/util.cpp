@@ -34,7 +34,7 @@ static std::vector<std::string> unquoted(const std::vector<std::string>& cmd) {
 
 // Run a converter directly instead of through system(): no shell process per
 // call (on Windows that was a cmd.exe for each of ~20k conversions).
-static int run_process(const std::vector<std::string>& cmd, const std::string& cmdstr) {
+static int run_process(const std::vector<std::string>& cmd, [[maybe_unused]] const std::string& cmdstr) {
 #ifdef _WIN32
     // Hand the child the same command line system() did; its CRT splits argv
     // exactly as before, quotes included.
