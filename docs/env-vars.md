@@ -18,7 +18,7 @@ Warp arguments use the `area,room,x,y,layer` form (C integer literals, so
 | Variable | File(s) | Purpose |
 |---|---|---|
 | `TMC_BASEROM` | port/port_rom.c | Path to the ROM; checked before the exe-dir/cwd probe list. |
-| `TMC_AUTOPLAY` | port/port_main.c, port/port_update_check.c | Skip the prelaunch menu and the update check (headless/CI runs). |
+| `TMC_AUTOPLAY` | port/port_main.c, port/port_update_check.c | Skip the prelaunch menu and the update check (headless/CI runs). `--skip-launcher` and config.json's `"skip_launcher": true` both set this to `1` in-process at startup — same effect, discoverable without an env var. |
 | `TMC_NO_UPDATE_CHECK` | port/port_update_check.c | Skip the network update check. |
 | `TMC_AUTOLOAD` | src/fileselect.c | `0`-`2`: auto-select that file-select slot and start it. |
 | `TMC_ANDROID_RUNTIME_DIR` | port/port_asset_bootstrap.cpp | Android only: override the runtime asset directory. |

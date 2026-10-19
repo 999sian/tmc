@@ -447,6 +447,7 @@ int main(int argc, char* argv[]) {
     u8 window_scale = Port_Config_WindowScale();
     int window_base_width = (MODE1_GBA_WIDTH > 240 && Port_Config_WidescreenEnabled()) ? MODE1_GBA_WIDTH : 240;
     bool noAudio = false;
+    bool skipLauncher = false;
     const char* glslpPath = NULL;
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
@@ -464,6 +465,8 @@ int main(int argc, char* argv[]) {
                 noAudio = true;
             } else if (strncmp(argv[i], "--glslp=", 8) == 0) {
                 glslpPath = argv[i] + 8;
+            } else if (strcmp(argv[i], "--skip-launcher") == 0) {
+                skipLauncher = true;
             } else if (strcmp(argv[i], "--console-parity") == 0) {
                 /* Force hardware-equivalent behavior for legit runs. Applied
                  * after Port_Config_Load (line ~316) so it overrides config. */
@@ -473,7 +476,7 @@ int main(int argc, char* argv[]) {
             } else if (strcmp(argv[i], "--help") == 0) {
                 fprintf(stderr,
                         "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio] [--glslp=<path>] "
-                        "[--console-parity]\n",
+                        "[--console-parity] [--skip-launcher]\n",
                         argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
                 fprintf(stderr,
@@ -487,7 +490,12 @@ int main(int argc, char* argv[]) {
                 fprintf(
                     stderr,
                     "                          (no input edge-cache, no save-states, no widescreen, 59.7275 Hz).\n");
-                fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
+                fprintf(stderr,
+                        "  --skip-launcher:        Skip the prelaunch Play screen and update-check dialog.\n");
+                fprintf(stderr,
+                        "                          Equivalent to setting TMC_AUTOPLAY=1 env var for this run.\n");
+                fprintf(stderr, "  config.json: Set window_scale and bindings defaults; \"skip_launcher\": true "
+                                "makes --skip-launcher permanent.\n");
                 return 0;
             } else {
                 fprintf(stderr, "Unknown argument: %s\n", argv[i]);
@@ -508,6 +516,23 @@ int main(int argc, char* argv[]) {
 #else
         extern int setenv(const char*, const char*, int);
         setenv("TMC_GLSLP_PRESET", glslpPath, /*overwrite=*/1);
+#endif
+    }
+
+    /* --skip-launcher and config.json's "skip_launcher" both apply by setting
+     * TMC_AUTOPLAY=1 in-process, same as --glslp= above: the prelaunch check
+     * (below) and Port_CheckForUpdates() keep reading TMC_AUTOPLAY unchanged,
+     * so this one env var stays the single source of truth for "skip the
+     * menu" instead of duplicating the check at every call site. Only set
+     * it when true — never unset an env var the user's shell may have
+     * exported for their own reasons. */
+    if (skipLauncher || Port_Config_GetSkipLauncher()) {
+#if defined(_WIN32)
+        extern int _putenv_s(const char*, const char*);
+        _putenv_s("TMC_AUTOPLAY", "1");
+#else
+        extern int setenv(const char*, const char*, int);
+        setenv("TMC_AUTOPLAY", "1", /*overwrite=*/1);
 #endif
     }
 
