@@ -679,8 +679,10 @@ jobs:
           test -f "$BIN_PATH"
 
           OUTDIR="artifact"
-          mkdir -p "$OUTDIR"
+          mkdir -p "$OUTDIR/assets/rando"
           cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
+          cp assets/voxel_shapes.json "$OUTDIR/voxel_shapes.json"
+          cp assets/rando/default.logic "$OUTDIR/assets/rando/default.logic"
 
       - name: Create archive
         shell: bash
@@ -695,10 +697,10 @@ jobs:
           ARCH="${{ matrix.arch }}"
           [ -z "$ARCH" ] && ARCH="x86_64"
           ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${ARCH}-${VERSION_LABEL}"
-          # Name the single payload file explicitly rather than ".", so tar
-          # does not store a leading "./" member that some extractors surface
-          # as a phantom top-level "." folder (v0.6 release oversight).
-          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact "${{ matrix.exe_name }}"
+          # Name the public payload files explicitly so ROMs, runtime caches,
+          # and a leading "./" directory member never enter the archive.
+          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact \
+            "${{ matrix.exe_name }}" voxel_shapes.json assets/rando/default.logic
           echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload artifact
