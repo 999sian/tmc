@@ -14,6 +14,8 @@ extern "C" {
 #include "port_asset_index.h"
 #include "structures.h"
 #include "area.h"
+#include "map.h"
+#include "tileMap.h"
 #undef this
 
 extern RoomHeader* gAreaRoomHeaders[];
@@ -85,6 +87,7 @@ struct SaveHeaderLite {
 struct GfxGroupEntryData {
     u8 unknown;
     u32 dest;
+    u32 size;
     std::string file;
     bool terminator;
 };
@@ -434,6 +437,7 @@ void ParseGfxGroups(const nlohmann::json& root) {
             GfxGroupEntryData entry = {};
             entry.unknown = static_cast<u8>(jsonEntry.value("unknown", 0));
             entry.dest = jsonEntry.value("dest", 0u);
+            entry.size = jsonEntry.value("size", 0u);
             entry.file = JsonStringOrEmpty(jsonEntry, "file");
             entry.terminator = jsonEntry.value("terminator", false);
             entries.push_back(std::move(entry));
@@ -1358,6 +1362,42 @@ extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned 
     }
 }
 
+// Gfx destinations are writable EWRAM or VRAM; ROM and arbitrary pointers are invalid.
+void* ResolveGfxDestination(u32 dest, u32 size) {
+    if (size == 0)
+        return nullptr;
+    if (dest >= 0x06000000u && dest < 0x06018000u && size <= 0x06018000u - dest)
+        return gba_TryMemPtr(dest);
+    if (dest < 0x02000000u || dest >= 0x02040000u || size > 0x02040000u - dest)
+        return nullptr;
+
+    void* start = Port_ResolveEwramPtr(dest);
+    if (start == nullptr)
+        return nullptr;
+    // EWRAM contains remapped map buffers: even matching endpoints can enclose a separate allocation.
+    const uintptr_t nativeStart = reinterpret_cast<uintptr_t>(start);
+    const struct { const void* data; size_t size; } buffers[] = {
+        {gEwram, sizeof(gEwram)}, {&gMapTop, sizeof(gMapTop)}, {&gMapBottom, sizeof(gMapBottom)},
+        {gMapDataTopSpecial, sizeof(gMapDataTopSpecial)}, {gMapDataBottomSpecial, sizeof(gMapDataBottomSpecial)},
+    };
+    bool fits = false;
+    for (const auto& buffer : buffers) {
+        const uintptr_t base = reinterpret_cast<uintptr_t>(buffer.data);
+        if (nativeStart >= base && nativeStart - base < buffer.size &&
+            size <= buffer.size - (nativeStart - base)) {
+            fits = true;
+            break;
+        }
+    }
+    if (!fits)
+        return nullptr;
+    for (u32 offset = 1; offset < size; ++offset) {
+        if (reinterpret_cast<uintptr_t>(Port_ResolveEwramPtr(dest + offset)) != nativeStart + offset)
+            return nullptr;
+    }
+    return start;
+}
+
 enum GfxLoadDecision {
     GFX_SKIP = 0,
     GFX_LOAD = 1,
@@ -1475,7 +1515,11 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
 
         if (decision == GFX_LOAD && !entry.file.empty()) {
             const std::vector<u8>* fileData = LoadBinaryFileCached(entry.file);
-            if (fileData == nullptr) {
+            if (fileData == nullptr || fileData->size() != entry.size) {
+                return FALSE;
+            }
+            void* resolvedDest = ResolveGfxDestination(entry.dest, entry.size);
+            if (resolvedDest == nullptr) {
                 return FALSE;
             }
 
@@ -1500,17 +1544,7 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
              * EWRAM still needs Port_ResolveEwramPtr because the port has
              * heap-allocated stand-in arrays for gMapDataBottomSpecial /
              * gMapDataTopSpecial / gMapTop etc. that live OUTSIDE gEwram[]. */
-            void* resolvedDest = nullptr;
-            if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
-                resolvedDest = Port_ResolveEwramPtr(entry.dest);
-            }
-
-            if (resolvedDest != nullptr) {
-                std::memcpy(resolvedDest, fileData->data(), fileData->size());
-            } else {
-                MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
-                        static_cast<u32>(fileData->size()));
-            }
+            std::memcpy(resolvedDest, fileData->data(), fileData->size());
             loadedAny = true;
         }
 
