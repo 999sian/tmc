@@ -49,6 +49,7 @@ void Port_Voxel_RequestShot(const char*) {
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -442,23 +443,34 @@ int MapShownPct(const MapLayer& layer, const u16* map) {
     const int size = cnt >> 14;
     const int hofs = gIoMem[0x10 + bg * 4] | (gIoMem[0x11 + bg * 4] << 8);
     const int vofs = gIoMem[0x12 + bg * 4] | (gIoMem[0x13 + bg * 4] << 8);
-    const int rx0 = gRoomControls.scroll_x - gRoomControls.origin_x;
-    const int ry0 = gRoomControls.scroll_y - gRoomControls.origin_y;
-    int match = 0, total = 0;
-    for (int sy = 4; sy < 160; sy += 8) {
-        for (int sx = 4; sx < 240; sx += 8) {
-            const int rx = rx0 + sx, ry = ry0 + sy;
-            if (rx < 0 || ry < 0 || rx >= 1024 || ry >= 1024)
-                continue;
-            const int tx = ((sx + hofs) >> 3) & (size & 1 ? 63 : 31);
-            const int ty = ((sy + vofs) >> 3) & (size & 2 ? 63 : 31);
-            const int block = (tx >> 5) + (ty >> 5) * (size & 1 ? 2 : 1);
-            const u16 e = sb[(block * 1024 + (ty & 31) * 32 + (tx & 31)) & 0x3FFF];
-            match += e == map[(ry >> 3) * 128 + (rx >> 3)];
-            ++total;
+    /* gRoomControls.scroll is the game's camera; the BG offset registers are
+     * latched separately. While the camera moves the two can be a tile apart
+     * for a frame, which sank every sample and flashed the 2D view a few times
+     * a second. Score the camera's tile and its 8 neighbours, keep the best. */
+    int best = 0;
+    for (int oy = -8; oy <= 8; oy += 8) {
+        for (int ox = -8; ox <= 8; ox += 8) {
+            const int rx0 = gRoomControls.scroll_x - gRoomControls.origin_x + ox;
+            const int ry0 = gRoomControls.scroll_y - gRoomControls.origin_y + oy;
+            int match = 0, total = 0;
+            for (int sy = 4; sy < 160; sy += 8) {
+                for (int sx = 4; sx < 240; sx += 8) {
+                    const int rx = rx0 + sx, ry = ry0 + sy;
+                    if (rx < 0 || ry < 0 || rx >= 1024 || ry >= 1024)
+                        continue;
+                    const int tx = ((sx + hofs) >> 3) & (size & 1 ? 63 : 31);
+                    const int ty = ((sy + vofs) >> 3) & (size & 2 ? 63 : 31);
+                    const int block = (tx >> 5) + (ty >> 5) * (size & 1 ? 2 : 1);
+                    const u16 e = sb[(block * 1024 + (ty & 31) * 32 + (tx & 31)) & 0x3FFF];
+                    match += e == map[(ry >> 3) * 128 + (rx >> 3)];
+                    ++total;
+                }
+            }
+            if (total)
+                best = std::max(best, match * 100 / total);
         }
     }
-    return total ? match * 100 / total : 0;
+    return best;
 }
 bool BottomMapShown(void) {
     return MapShownPct(gMapBottom, gMapDataBottomSpecial) >= 50;
@@ -1300,11 +1312,31 @@ void Port_Voxel_SetAreaWallTiles(int area, int tiles) {
     SaveShapes();
 }
 
+/* TMC_VOXEL_DEBUG=1: log each 2D fallback and geometry rebuild, to chase flicker. */
+static bool VoxelDebug(void) {
+    static int on = -1;
+    if (on < 0) {
+        const char* e = std::getenv("TMC_VOXEL_DEBUG");
+        on = (e && *e && *e != '0') ? 1 : 0;
+    }
+    return on == 1;
+}
+
 bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
+    static unsigned sPresentFrame = 0;
+    ++sPresentFrame;
     if (sShotPending)
         WriteShot();
-    if (!Port_Config_GetVoxelView() || !SceneApplicable())
+    if (!Port_Config_GetVoxelView())
         return false;
+    if (!SceneApplicable()) {
+        if (VoxelDebug())
+            fprintf(stderr, "[voxel-dbg] f=%u 2D fallback: task=%d state=%d substate=%d bg=%p w=%d h=%d bottomPct=%d\n",
+                    sPresentFrame, (int)gMain.task, (int)gMain.state, (int)gMain.substate,
+                    (void*)gMapBottom.bgSettings, (int)gRoomControls.width, (int)gRoomControls.height,
+                    gMapBottom.bgSettings ? MapShownPct(gMapBottom, gMapDataBottomSpecial) : -1);
+        return false;
+    }
     if (!sInitTried)
         sReady = Init();
     if (!sReady || !EnsureDepth(swapW, swapH))
@@ -1327,6 +1359,9 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
     else if (sSettleFrames > 0 && --sSettleFrames == 0)
         mapDirty = true;
     if (mapDirty) {
+        if (VoxelDebug())
+            fprintf(stderr, "[voxel-dbg] f=%u rebuild (%s)\n", sPresentFrame,
+                    mapKey != sMapKey ? "map changed" : "settle");
         BuildMap();
         sMapKey = mapKey;
     }
