@@ -1,4 +1,37 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+
+static int sFailFlush, sFailSync, sFailClose, sFailRename;
+static int TestFlush(FILE* f) {
+    if (sFailFlush) { errno = ENOSPC; return EOF; }
+    return fflush(f);
+}
+static int TestSync(int fd) {
+    if (sFailSync) { errno = EIO; return -1; }
+    return fsync(fd);
+}
+static int TestClose(FILE* f) {
+    int result = fclose(f);
+    if (sFailClose) { errno = EIO; return EOF; }
+    return result;
+}
+static int TestRename(const char* from, const char* to) {
+    if (sFailRename) { errno = EACCES; return -1; }
+    return rename(from, to);
+}
+#define fflush TestFlush
+#define fsync TestSync
+#define fclose TestClose
+#define rename TestRename
 #include "port/port_quicksave.c"
+#undef fflush
+#undef fsync
+#undef fclose
+#undef rename
 #include <assert.h>
 u8 gEwram[0x40000], gIwram[0x8000], gVram[0x18000], gIoMem[0x400];
 u32 gRand;
@@ -13,6 +46,52 @@ LinkedList gEntityListsBackup[9];
 Entity* gPlayerClones[3];
 UpdateContext gUpdateContext;
 void Port_RestorePlayerHitbox(void) {}
+
+static void CheckFailedOverwrite(void) {
+    assert(Port_QuickSave_SaveSlot(0));
+    struct stat old;
+    assert(stat("state_quick.bin", &old) == 0);
+    unsigned char* original = malloc(old.st_size);
+    unsigned char* actual = malloc(old.st_size);
+    assert(original && actual);
+    FILE* f = fopen("state_quick.bin", "rb");
+    assert(f && fread(original, 1, old.st_size, f) == (size_t)old.st_size);
+    assert(fclose(f) == 0);
+    struct rlimit limit;
+    assert(getrlimit(RLIMIT_FSIZE, &limit) == 0);
+    void (*oldSignal)(int) = signal(SIGXFSZ, SIG_IGN);
+    assert(oldSignal != SIG_ERR);
+    enum { SHORT_WRITE, DISK_FULL, FLUSH, SYNC, CLOSE, RENAME };
+    for (int failure = SHORT_WRITE; failure <= RENAME; ++failure) {
+        if (failure <= DISK_FULL) {
+            struct rlimit full = limit;
+            full.rlim_cur = failure == SHORT_WRITE ? 128 : old.st_size - 1;
+            assert(setrlimit(RLIMIT_FSIZE, &full) == 0);
+        }
+        sFailFlush = failure == FLUSH;
+        sFailSync = failure == SYNC;
+        sFailClose = failure == CLOSE;
+        sFailRename = failure == RENAME;
+        ++gRand;
+        assert(!Port_QuickSave_SaveSlot(0));
+        assert(setrlimit(RLIMIT_FSIZE, &limit) == 0);
+        sFailFlush = sFailSync = sFailClose = sFailRename = 0;
+        struct stat now;
+        assert(stat("state_quick.bin", &now) == 0 && now.st_size == old.st_size);
+        f = fopen("state_quick.bin", "rb");
+        assert(f && fread(actual, 1, old.st_size, f) == (size_t)old.st_size);
+        assert(fclose(f) == 0);
+        assert(memcmp(original, actual, old.st_size) == 0);
+        assert(access("state_quick.bin.tmp", F_OK) != 0);
+        free(sSlots[0].snapshot);
+        memset(&sSlots[0], 0, sizeof(sSlots[0]));
+        assert(ReadSlotFromDisk(0));
+    }
+    assert(signal(SIGXFSZ, oldSignal) != SIG_ERR);
+    assert(Port_QuickSave_SaveSlot(0));
+    free(original);
+    free(actual);
+}
 
 int main(void) {
     Slot s = {0};
@@ -76,6 +155,9 @@ int main(void) {
     assert(sSlots[0].saved_bases[0] == (uintptr_t)gEwram);
     assert(Snapshot_Restore(&sSlots[0]));
     assert(saved->next == (Entity*)&gEntityLists[0]);
+    free(sSlots[0].snapshot);
+    memset(&sSlots[0], 0, sizeof(sSlots[0]));
+    CheckFailedOverwrite();
     free(sSlots[0].snapshot);
     memset(&sSlots[0], 0, sizeof(sSlots[0]));
     FILE* f = fopen("state_quick.bin", "r+b");
