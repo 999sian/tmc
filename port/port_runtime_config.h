@@ -46,6 +46,8 @@ bool Port_Config_GetShowFps(void);
 void Port_Config_SetShowFps(bool on);
 bool Port_Config_GetVoxelView(void);
 void Port_Config_SetVoxelView(bool on);
+bool Port_Config_GetVoxelWallFade(void);
+void Port_Config_SetVoxelWallFade(bool on);
 int Port_Config_GetVoxelPitch(void);
 void Port_Config_CycleVoxelPitch(int dir);
 bool Port_Config_PortSettingsMenuEnabled(void);
@@ -99,6 +101,14 @@ void Port_Config_ToggleWidescreen(void);
  * config.json as "console_parity"; --console-parity forces it on at launch. */
 bool Port_Config_GetConsoleParity(void);
 void Port_Config_SetConsoleParity(bool on);
+
+/* Persisted equivalent of TMC_AUTOPLAY: skip the prelaunch Play screen.
+ * --skip-launcher sets this for the session; config.json's "skip_launcher"
+ * makes it permanent. Both apply by setting TMC_AUTOPLAY=1 in-process
+ * (port_main.c), so they also skip the update-check dialog like the env
+ * var already does — see docs/env-vars.md. Default OFF. */
+bool Port_Config_GetSkipLauncher(void);
+void Port_Config_SetSkipLauncher(bool on);
 void Port_Config_ToggleConsoleParity(void);
 
 /* Aspect-ratio mode for the on-screen viewport. The game frame is always
@@ -230,6 +240,10 @@ bool Port_Config_GetMenuHintSeen(void);
 void Port_Config_SetMenuHintSeen(bool seen);
 bool Port_Config_GetHoldToAdvanceText(void);
 void Port_Config_SetHoldToAdvanceText(bool on);
+bool Port_Config_GetHdDialogue(void);
+void Port_Config_SetHdDialogue(bool on);
+bool Port_Config_GetMenuArtBackground(void);
+void Port_Config_SetMenuArtBackground(bool on);
 bool Port_Config_GetRollAttackMacroEnabled(void);
 void Port_Config_SetRollAttackMacroEnabled(bool on);
 float Port_Config_GetMasterVolume(void);

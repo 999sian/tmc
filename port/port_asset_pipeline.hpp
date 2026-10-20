@@ -22,7 +22,7 @@ namespace PortAssetPipeline {
  * stamped by an older binary are treated as stale. Checked by both the
  * JSON-tree rebuild path (RuntimeAssetsNeedRebuild) and the warm-launch
  * stamp check (AssetExtractorApi::RuntimeUpToDate). */
-inline constexpr int kBuildStateVersion = 3; /* v3: EU paletteGroups 208 -> 207 */
+inline constexpr int kBuildStateVersion = 4; /* v4: largest duplicate index entry for loose output */
 
 /* Read the whole file at `path` into `out`, resized to its size.
  * Returns true on success; a 0-byte file succeeds with `out` empty. On
@@ -100,7 +100,10 @@ bool EnsureRuntimeAssetsBuilt(const std::filesystem::path& sourceRoot, const std
 /// based on the current contents of sourceRoot. Used by the extractor once
 /// it has dual-written both trees in a single pass, so that subsequent runs
 /// can detect the runtime tree as up-to-date and short-circuit.
+/// listSources=false records no source file manifest: for a source tree that
+/// is about to be deleted (runtime-only extraction), where the per-file stat
+/// pass is wasted. With no source tree present the state file is trusted as is.
 bool WriteBuildStateFile(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
-                         std::string* error = nullptr);
+                         std::string* error = nullptr, bool listSources = true);
 
 } // namespace PortAssetPipeline

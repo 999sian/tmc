@@ -94,7 +94,7 @@ capture() {
     # be visible to the capture. Assets resolve from the exe dir, not cwd.
     local capdir="$WORK/capcwd"
     mkdir -p "$capdir"
-    timeout -s KILL 90 env \
+    (cd "$capdir" && timeout -s KILL 90 env -i PATH="$PATH" \
         TMC_AUTOPLAY=1 TMC_PERFCAP=1 \
         ${warp:+TMC_PERFCAP_WARP="$warp"} \
         ${atframe:+TMC_PERFCAP_AT_FRAME="$atframe"} \
@@ -104,7 +104,11 @@ capture() {
         TMC_NO_UPDATE_CHECK=1 \
         SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
         TMC_BASEROM="$TMC_BASEROM" \
-        sh -c "cd '$capdir' && exec '$TMC_PC' --no-audio" >"$log" 2>&1 || true
+        "$TMC_PC" --no-audio) >"$log" 2>&1 || {
+        echo "[parity] capture failed: $spec" >&2
+        tail -15 "$log" >&2
+        return 1
+    }
     grep -oE 'frame_hash=0x[0-9a-f]+' "$log" | tail -1 | sed 's/frame_hash=//'
 }
 
@@ -130,10 +134,13 @@ while IFS=$'\t' read -r name regions spec _desc; do
     fi
     n=$((n+1))
     bin="$WORK/$name.bin"
-    tierB="$(capture "$spec" "$bin")"
+    tierB="$(capture "$spec" "$bin")" || { fail=1; continue; }
     if [ ! -s "$bin" ]; then echo "[parity] FAIL $name: no snapshot captured"; fail=1; continue; fi
     tierA="$("$PARITY" "$bin" 2>/dev/null)"
-    : "${tierB:=MISSING}"
+    if [[ ! "$tierA" =~ ^0x[0-9a-f]+$ || ! "$tierB" =~ ^0x[0-9a-f]+$ ]]; then
+        echo "[parity] FAIL $name: missing/invalid renderer hash"
+        fail=1; continue
+    fi
     key="$TMC_REGION/$name"
     if [ "$UPDATE" = 1 ]; then
         printf '%s\t%s\t%s\t%s\n' "$TMC_REGION" "$name" "$tierA" "$tierB" >> "$TMP_GOLDEN"
@@ -151,10 +158,12 @@ while IFS=$'\t' read -r name regions spec _desc; do
     fi
 done < "$CORPUS"
 
+if [ "$n" = 0 ]; then echo "[parity] FATAL: no scenes selected"; exit 3; fi
 if [ "$UPDATE" = 1 ]; then
+    [ "$fail" = 0 ] || { echo "[parity] golden unchanged: capture failures"; exit 1; }
     # Merge: keep golden rows for other regions, replace this region's rows.
     if [ -f "$GOLDEN" ]; then
-        grep -vE "^${TMC_REGION}	" "$GOLDEN" 2>/dev/null | grep -v '^#' >> "$TMP_GOLDEN" || true
+        awk -F '\t' -v region="$TMC_REGION" '$1 != region && $0 !~ /^#/' "$GOLDEN" >> "$TMP_GOLDEN"
     fi
     { printf '# region\tname\ttierA(static)\ttierB(e2e)\n'
       LC_ALL=C sort "$TMP_GOLDEN"; } > "$GOLDEN"

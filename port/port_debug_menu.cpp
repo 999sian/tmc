@@ -863,12 +863,10 @@ MenuPage BuildSaveStatesPage(void) {
                 Toast("Slot empty");
         };
         it.cycleLeft = [s]() {
-            if (Port_QuickSave_SaveSlot(s))
-                Toast("Saved");
+            Toast(Port_QuickSave_SaveSlot(s) ? "Saved" : "Save failed");
         };
         it.cycleRight = [s]() {
-            if (Port_QuickSave_SaveSlot(s))
-                Toast("Saved");
+            Toast(Port_QuickSave_SaveSlot(s) ? "Saved" : "Save failed");
         };
         it.labelFn = [s]() { return FormatSlotLabel(s); };
         p.items.push_back(std::move(it));

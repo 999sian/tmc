@@ -22,6 +22,9 @@
 #     PPU_CORPUS=tools/ppu_corpus.local.txt PPU_GOLDEN=/tmp/ppu_golden.local \
 #         tools/ppu_parity_check.sh            # after — must still PASS
 #
+# Named fresh-save/menu/dialogue presentation checks live in render_scenes.tsv;
+# see docs/render-scene-checks.md. Their enhanced pixels use separate baselines.
+#
 # --- portable scenes (committed + CI-gated) ---
 intro_logo	all	atframe=150	intro logo — GBA mode0 (VPPU mode1): BG0+BG2 text
 title	all	atframe=300	title screen — GBA mode1 affine (VPPU mode2): BG0/BG1 text + BG2 affine + OBJ

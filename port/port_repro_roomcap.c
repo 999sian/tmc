@@ -17,17 +17,59 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <ctype.h>
 #include "main.h"       /* gMain, SetTask, TASK_* */
 #include "save.h"       /* SaveFile, gSave */
+#include "flags.h"      /* SetGlobalFlag, LVn_CLEAR, TABIDACHI (TMC_ROOMCAP_PROGRESS) */
 #include "fileselect.h" /* gMapDataBottomSpecial, ResetSaveFile */
 #include "room.h"       /* gRoomControls */
 #include "message.h"    /* gMessage, MessageRequest (TMC_ROOMCAP_MSG hook) */
 #include "script.h"     /* gActiveScriptInfo, ScriptExecutionContext (TMC_ROOMCAP_PAN_PROBE) */
 #include "port_repro.h"
+#include "pauseMenu.h"
+#include "fade.h"
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
 #include "port_debug_actions.h"
+#include "port_entity_ctx.h" /* Port_GetEntityScriptCtx (TMC_ROOMCAP_TOUR_DEBUG) */
+#include "ui.h"         /* gHUD, HUD_HIDE_ALL (TMC_ROOMCAP_CLEAN) */
+#include "game.h"       /* GAMEMAIN_UPDATE (TMC_ROOMCAP_TOUR) */
+#include "player.h"     /* gPlayerEntity (TMC_ROOMCAP_CLEAN) */
+#include "item_ids.h"   /* ITEM_KINSTONE_BAG (TMC_ROOMCAP_TOUR) */
 
 extern int Port_CaptureBaseFramebufferPNG(const char* path);
+extern int Port_CapturePresentationPNG(const char* path);
+
+/* Presentation readback is queued at the end of a frame; poll next tick. */
+static int RoomCap_Capture(const char* path) {
+    const char* present = getenv("TMC_ROOMCAP_PRESENTATION");
+    if (present && *present && strcmp(present, "0") != 0)
+        return Port_CapturePresentationPNG(path);
+    return Port_CaptureBaseFramebufferPNG(path) ? 1 : -1;
+}
+/* Parse before narrowing to the warp API's byte/halfword fields. */
+static int RoomCap_ParseTourRow(const char* line, unsigned int values[5]) {
+    int count = 0;
+    while (1) {
+        while (isspace((unsigned char)*line))
+            ++line;
+        if (!*line || *line == '#')
+            break;
+        if (count == 5)
+            return -1;
+        char* end;
+        errno = 0;
+        long value = strtol(line, &end, 0);
+        long max = count == 2 || count == 3 ? 65535 : 255;
+        if (end == line || errno || value < 0 || value > max ||
+            (*end && !isspace((unsigned char)*end) && *end != '#'))
+            return -1;
+        values[count++] = (unsigned int)value;
+        line = end;
+    }
+    return count == 0 ? 0 : count >= 4 ? 1 : -1;
+}
+
 extern void SetActiveSave(u32 idx); /* fileselect.c (no header decl) */
 
 /* Dump the mode1 PPU memory (io/vram/bg-pltt/obj-pltt/oam) for JP-vs-USA diff. */
@@ -55,6 +97,8 @@ static void RoomCap_DumpPpu(const char* path) {
 void Port_ReproRoomCap_Tick(unsigned int frame) {
     static int active = -1;
     static int booted = 0, warp_done = 0, cap_frame = 0, settle = 300;
+    static int tour_running = 0;
+    static int msg_posY = -1;
     static unsigned int a = 0x03, r = 0x08, x = 0x1d8, y = 0x138, l = 0;
 
     if (active < 0) {
@@ -72,6 +116,11 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
     }
     if (!active)
         return;
+    if (frame >= 5000 && !(booted && tour_running)) {
+        fprintf(stderr, "[roomcap] timeout (task=%u)\n", (unsigned)gMain.task);
+        fflush(stderr);
+        _Exit(3);
+    }
 
     /* Press START at the title to reach file-select. */
     if (!booted && gMain.task == TASK_TITLE && frame >= 30 && (frame & 0xF) < 3) {
@@ -85,6 +134,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
     {
         static int fsel = -1;
         static int fsel_first = 0;
+        static unsigned fsel_ready = 0;
         if (fsel < 0) {
             const char* fe = getenv("TMC_ROOMCAP_FILESELECT");
             fsel = (fe && *fe && strcmp(fe, "0") != 0) ? 1 : 0;
@@ -135,14 +185,23 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                 }
                 return;
             }
-            if (gMain.task == TASK_FILE_SELECT && frame > 200 && objon) {
+            if (gMain.task == TASK_FILE_SELECT && frame > 200 && objon && !gFadeControl.active) {
+                if (fsel_ready == 0)
+                    fsel_ready = frame;
+                /* The base framebuffer is from the preceding frame; let the fade finish. */
+                if (frame < fsel_ready + 30)
+                    return;
                 const char* base = getenv("TMC_ROOMCAP_OUT");
                 if (!base || !*base)
                     base = "fsel.png";
                 if (fsel_first == 0) {
                     char p[512];
                     snprintf(p, sizeof(p), "%s_a.png", base);
-                    int ok = Port_CaptureBaseFramebufferPNG(p);
+                    int ok = RoomCap_Capture(p);
+                    if (ok == 0)
+                        return;
+                    if (ok < 0)
+                        _Exit(2);
                     fprintf(stderr, "[roomcap-fsel] frame %u: captured %s -> %d (state=%u substate=%u)\n", frame, p, ok,
                             (unsigned)gMain.state, (unsigned)gUI.state);
                     fsel_first = (int)frame;
@@ -155,7 +214,11 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                 } else if ((int)frame >= fsel_first + 60) {
                     char p[512];
                     snprintf(p, sizeof(p), "%s_b.png", base);
-                    int ok = Port_CaptureBaseFramebufferPNG(p);
+                    int ok = RoomCap_Capture(p);
+                    if (ok == 0)
+                        return;
+                    if (ok < 0)
+                        _Exit(2);
                     fprintf(stderr, "[roomcap-fsel] frame %u: captured %s -> %d\n", frame, p, ok);
                     const char* dumpb = getenv("TMC_ROOMCAP_DUMP");
                     if (dumpb && *dumpb) {
@@ -164,13 +227,8 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                         RoomCap_DumpPpu(d);
                     }
                     fflush(stderr);
-                    _Exit(ok ? 0 : 2);
+                    _Exit(ok > 0 ? 0 : 2);
                 }
-            }
-            if (frame == 5000) {
-                fprintf(stderr, "[roomcap-fsel] timeout (task=%u)\n", (unsigned)gMain.task);
-                fflush(stderr);
-                _Exit(3);
             }
             return; /* don't fall through to the room-bootstrap path */
         }
@@ -193,6 +251,203 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         SetTask(TASK_GAME);
         booted = 1;
         fprintf(stderr, "[roomcap] frame %u: bootstrapped new game -> TASK_GAME (start 0x%02x/0x%02x)\n", frame, a, r);
+    }
+
+    /* TMC_ROOMCAP_TOUR=<plan>: capture many views in one session, as the
+     * voxel tour (port_repro_npc_talk.c) walks every room -- a restart per
+     * capture costs seconds; this costs the warp. The plan is one view a
+     * line, "area room x y [layer]" (x, y in the room's own pixels); the
+     * captures go to TMC_ROOMCAP_TOUR_OUT/<line>.png, each logged as
+     * "[roomcap] tour <line> view room=../.. scroll=x,y size=w,h" (the
+     * camera in room pixels). Clean throughout (TMC_ROOMCAP_CLEAN). A view
+     * that never lands in its room fails the tour so drivers can resume. */
+    {
+        static int tour = -1, tn = 0, ti = 0;
+        static unsigned char ta[4096], tr[4096], tl[4096];
+        static unsigned short tx[4096], ty[4096];
+        static unsigned int fired = 0, arrived = 0, since = 0;
+        if (tour < 0) {
+            const char* plan = getenv("TMC_ROOMCAP_TOUR");
+            tour = 0;
+            if (plan && *plan) {
+                FILE* f = fopen(plan, "r");
+                if (!f) {
+                    fprintf(stderr, "[roomcap] cannot read tour plan %s\n", plan);
+                    _Exit(2);
+                }
+                char line[256];
+                while (fgets(line, sizeof line, f)) {
+                    unsigned int values[5] = { 0 };
+                    int row = RoomCap_ParseTourRow(line, values);
+                    if (row < 0 || (!strchr(line, '\n') && !feof(f)) || (row && tn == 4096)) {
+                        fprintf(stderr, "[roomcap] invalid or oversized tour plan %s\n", plan);
+                        _Exit(2);
+                    }
+                    if (row) {
+                        ta[tn] = values[0], tr[tn] = values[1], tl[tn] = values[4];
+                        tx[tn] = values[2], ty[tn] = values[3];
+                        ++tn;
+                    }
+                }
+                int valid = !ferror(f) && tn > 0;
+                if (fclose(f) != 0)
+                    valid = 0;
+                if (!valid) {
+                    fprintf(stderr, "[roomcap] empty or unreadable tour plan %s\n", plan);
+                    _Exit(2);
+                }
+                const char* st = getenv("TMC_ROOMCAP_TOUR_START");
+                if (st && *st) {
+                    char* end;
+                    errno = 0;
+                    long start = strtol(st, &end, 10);
+                    int parsed = end != st;
+                    while (isspace((unsigned char)*end))
+                        ++end;
+                    if (!parsed || *end || errno || start < 0 || start > tn) {
+                        fprintf(stderr, "[roomcap] invalid tour start %s (expected 0..%d)\n", st, tn);
+                        _Exit(2);
+                    }
+                    ti = (int)start;
+                }
+                tour = tour_running = 1;
+                fprintf(stderr, "[roomcap] tour: %d views, from %d\n", tn, ti);
+            }
+        }
+        if (tour) {
+            if (ti >= tn) {
+                fprintf(stderr, "[roomcap] tour done\n");
+                fflush(stderr);
+                _Exit(0);
+            }
+            /* stuck -- a scene or menu that never gives the game back: say
+             * which view, and end; the driver starts again after it
+             * (TMC_ROOMCAP_TOUR_START) */
+            if (booted && since && frame - since > 2400) {
+                fprintf(stderr, "[roomcap] tour %d stuck room=0x%02x/0x%02x (task=%u)\n", ti, ta[ti], tr[ti],
+                        (unsigned)gMain.task);
+                fflush(stderr);
+                _Exit(3);
+            }
+            if (booted && since == 0)
+                since = frame;
+            if (!booted || gMain.task != TASK_GAME)
+                return;
+            /* past the prologue (TMC_ROOMCAP_PROGRESS dungeons cleared):
+             * without it Hyrule Town redirects to Festival Town (roomInit.c)
+             * and never arrives */
+            {
+                static int progressed = 0;
+                if (!progressed) {
+                    progressed = 1;
+                    const char* pg = getenv("TMC_ROOMCAP_PROGRESS");
+                    if (pg && *pg) {
+                        int np = atoi(pg);
+                        if (np < 0) np = 0;
+                        if (np > 6) np = 6;
+                        static const u32 kLv[6] = { LV1_CLEAR, LV2_CLEAR, LV3_CLEAR,
+                                                    LV4_CLEAR, LV5_CLEAR, LV6_CLEAR };
+                        SetGlobalFlag(TABIDACHI);
+                        for (int i = 0; i < np; i++)
+                            SetGlobalFlag(kLv[i]);
+                        /* and what the game hands out by then: a cleared
+                         * dungeon's flag is taken back on the next area
+                         * change without its element (gameUtils.c, LVn_CLEAR
+                         * vs ITEM_*_ELEMENT) -- back to the prologue's town,
+                         * whose intro scene holds the camera; without the
+                         * kinstone bag, the town plays Ezlo's kinstone scene
+                         * (gUnk_080EE88C, roomInit.c) */
+                        static const u8 kElem[6] = { ITEM_EARTH_ELEMENT, ITEM_FIRE_ELEMENT, 0,
+                                                     ITEM_WATER_ELEMENT, ITEM_WIND_ELEMENT, 0 };
+                        for (int i = 0; i < np; i++)
+                            if (kElem[i])
+                                SetInventoryValue(kElem[i], 1);
+                        if (np > 0)
+                            SetInventoryValue(ITEM_KINSTONE_BAG, 1);
+                        UpdateGlobalProgress();
+                        fprintf(stderr, "[roomcap] tour progress: %d dungeons, global_progress=%u\n", np,
+                                (unsigned)gSave.global_progress);
+                    }
+                }
+            }
+            gHUD.hideFlags = HUD_HIDE_ALL;
+            gPlayerEntity.base.spriteSettings.draw = 0;
+            gSave.stats.health = gSave.stats.maxHealth;
+            const int calm = gPlayerState.controlMode == CONTROL_ENABLED && !(gMessage.state & MESSAGE_ACTIVE);
+            if (!calm && frame % 40 < 2) {
+                extern void Port_Config_TestForceEdge(int input);
+                Port_Config_TestForceEdge(0 /* PORT_INPUT_A */);
+            }
+            if (since == 0)
+                since = frame;
+            /* a scene holding the camera on something else is not the view */
+            const int here = arrived && gRoomControls.area == ta[ti] && gRoomControls.room == tr[ti] &&
+                             (gMain.substate == GAMEMAIN_UPDATE || gMain.substate == GAMEMAIN_BARRELUPDATE) &&
+                             gRoomControls.camera_target == &gPlayerEntity.base;
+            /* TMC_ROOMCAP_TOUR_DEBUG: each second, the wait -- and the
+             * scripts the NPCs run (ROM addresses; port_script_addrs.c
+             * names them), to find a scene that holds the camera */
+            if (getenv("TMC_ROOMCAP_TOUR_DEBUG") && frame % 60 == 0) {
+                fprintf(stderr, "[roomcap] tour %d wait frame %u room=0x%02x/0x%02x sub=%u ctl=%u cam=%d gp=%u\n", ti,
+                        frame, (unsigned)gRoomControls.area, (unsigned)gRoomControls.room,
+                        (unsigned)gMain.substate, (unsigned)gPlayerState.controlMode,
+                        gRoomControls.camera_target ? (int)gRoomControls.camera_target->id : -1,
+                        (unsigned)gSave.global_progress);
+                for (Entity* e = gEntityLists[7].first; e && e != (Entity*)&gEntityLists[7]; e = e->next) {
+                    ScriptExecutionContext* c = (e->flags & ENT_SCRIPTED) ? Port_GetEntityScriptCtx(e) : NULL;
+                    if (c && c->scriptInstructionPointer)
+                        fprintf(stderr, "[roomcap]   npc %d script at 0x%08x\n", (int)e->id,
+                                (unsigned)(0x08000000u + (u32)((u8*)c->scriptInstructionPointer - gRomData)));
+                }
+            }
+            /* a scene on arrival (an item Link lands on: "You got a Piece
+             * of Heart!") -- the settle starts again once it is over */
+            if (arrived && !calm)
+                arrived = frame;
+            if (!arrived) {
+                /* warp (again, if a fade swallowed it: after 3s) */
+                if ((fired == 0 || frame - fired > 180) &&
+                    Port_DebugAction_Warp(ta[ti], tr[ti], tx[ti], ty[ti], tl[ti]) == 1) {
+                    fired = frame;
+                    if (getenv("TMC_ROOMCAP_TOUR_DEBUG"))
+                        fprintf(stderr, "[roomcap] tour %d warp fired frame %u\n", ti, frame);
+                }
+                if (fired && frame - fired > 20 && gRoomControls.area == ta[ti] && gRoomControls.room == tr[ti] &&
+                    (gMain.substate == GAMEMAIN_UPDATE || gMain.substate == GAMEMAIN_BARRELUPDATE))
+                    arrived = frame;
+            } else if (here && (int)(frame - arrived) >= settle) {
+                const char* dir = getenv("TMC_ROOMCAP_TOUR_OUT");
+                char path[512];
+                if ((size_t)snprintf(path, sizeof path, "%s/%05d.png", dir && *dir ? dir : ".", ti) >= sizeof path) {
+                    fprintf(stderr, "[roomcap] tour output path too long\n");
+                    _Exit(2);
+                }
+                int ok = RoomCap_Capture(path);
+                if (ok < 0) {
+                    fprintf(stderr, "[roomcap] tour %d capture failed: %s\n", ti, path);
+                    _Exit(2);
+                }
+                if (ok > 0) {
+                    fprintf(stderr, "[roomcap] tour %d view room=0x%02x/0x%02x scroll=%d,%d size=%d,%d ok=%d link=%d,%d\n", ti,
+                            (unsigned)gRoomControls.area, (unsigned)gRoomControls.room,
+                            (int)(gRoomControls.scroll_x - gRoomControls.origin_x),
+                            (int)(gRoomControls.scroll_y - gRoomControls.origin_y), (int)gRoomControls.width,
+                            (int)gRoomControls.height, ok,
+                            (int)(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x),
+                            (int)(gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y));
+                    ++ti, fired = 0, arrived = 0, since = 0;
+                }
+            } else if (!here && gRoomControls.camera_target == &gPlayerEntity.base) {
+                arrived = 0;            /* left the room (an exit, a script): warp again;
+                                         * a scene holding the camera runs to the timeout */
+            }
+            if (since && frame - since > 900 && ti < tn) {
+                fprintf(stderr, "[roomcap] tour %d failed room=0x%02x/0x%02x (view timeout)\n", ti, ta[ti], tr[ti]);
+                fflush(stderr);
+                _Exit(3);
+            }
+            return;
+        }
     }
 
     /* Once stable in TASK_GAME, warp to the target (re-renders from active ROM). */
@@ -526,6 +781,19 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         }
     }
 
+    /* Open the existing item screen after the room settles, without changing saves. */
+    {
+        static int menu_opened = 0;
+        if (getenv("TMC_ROOMCAP_MENU") && !menu_opened && warp_done && cap_frame &&
+            (int)frame >= cap_frame - settle / 2) {
+            extern void InitPauseMenu(void);
+            gPauseMenuOptions.screen = PauseMenuScreen_1;
+            InitPauseMenu();
+            menu_opened = 1;
+            fprintf(stderr, "[roomcap] opened inventory menu\n");
+        }
+    }
+
     /* TMC_ROOMCAP_MSG=<index>[,posY]: open a textbox <settle/2> frames after
      * the warp so the capture shows live dialogue (widescreen centering
      * test). Optional posY overrides the box row (1 = top-anchored). */
@@ -538,12 +806,17 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             int posY = -1;
             sscanf(m, "%i,%i", &idx, &posY);
             MessageRequest(idx);
-            if (posY >= 0)
+            if (posY >= 0) {
                 gMessage.textWindowPosY = (u8)posY;
+                msg_posY = posY;
+            }
             fprintf(stderr, "[roomcap] frame %u: opened message 0x%x posY=%d\n", frame, idx, posY);
             msg_done = 1;
             msg_opened_at = frame;
         }
+        /* Text streams can carry their own position token during initialization. */
+        if (msg_done && msg_posY >= 0)
+            gTextRender.message.textWindowPosY = (u8)msg_posY;
         /* TMC_ROOMCAP_MSG_ADVANCE=1: tap A every ~40 frames after the box
          * opens so multi-page text rolls forward — but stop on the enquiry
          * (choice) page so the capture shows the live selector instead of
@@ -553,6 +826,28 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             frame > msg_opened_at + 30 && (frame - msg_opened_at) % 40 < 2) {
             extern void Port_Config_TestForceEdge(int input);
             Port_Config_TestForceEdge(0 /* PORT_INPUT_A */);
+        }
+    }
+
+    /* TMC_ROOMCAP_CLEAN: the room alone, to build a room's picture from -- the
+     * game's own HUD hide flags (HUD_HIDE_ALL) and Link not drawn, held
+     * every frame from the warp to the capture. */
+    if (warp_done) {
+        static int clean = -1;
+        if (clean < 0) {
+            const char* c = getenv("TMC_ROOMCAP_CLEAN");
+            clean = (c && *c && strcmp(c, "0") != 0) ? 1 : 0;
+        }
+        if (clean) {
+            gHUD.hideFlags = HUD_HIDE_ALL;
+            gPlayerEntity.base.spriteSettings.draw = 0;
+            /* dialogue or a cutscene that takes control on arrival (the
+             * prologue's "Where are you going?"): advance it, as the voxel
+             * tour does (port_repro_npc_talk.c) */
+            if (gPlayerState.controlMode != CONTROL_ENABLED && frame % 40 < 2) {
+                extern void Port_Config_TestForceEdge(int input);
+                Port_Config_TestForceEdge(0 /* PORT_INPUT_A */);
+            }
         }
     }
 
@@ -570,19 +865,38 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         const char* out = getenv("TMC_ROOMCAP_OUT");
         if (!out || !*out)
             out = "roomcap.png";
-        int ok = Port_CaptureBaseFramebufferPNG(out);
+        if (getenv("TMC_ROOMCAP_MSG") && !(gMessage.state & MESSAGE_ACTIVE)) {
+            fprintf(stderr, "[roomcap] expected dialogue is not active\n");
+            _Exit(2);
+        }
+        if (msg_posY >= 0) {
+            int bx, by, bw, bh;
+            if (!Message_GetWindowRect(&bx, &by, &bw, &bh) || by != msg_posY * 8) {
+                fprintf(stderr, "[roomcap] expected dialogue anchor is not active\n");
+                _Exit(2);
+            }
+        }
+        if (getenv("TMC_ROOMCAP_MENU") &&
+            (gMain.substate != GAMEMAIN_SUBTASK || gPauseMenuOptions.screen != PauseMenuScreen_1)) {
+            fprintf(stderr, "[roomcap] expected inventory is not active\n");
+            _Exit(2);
+        }
+        int ok = RoomCap_Capture(out);
+        if (ok == 0)
+            return;
         fprintf(stderr, "[roomcap] frame %u: captured %s -> %d (area=0x%02x room=0x%02x)\n", frame, out, ok,
                 (unsigned)gRoomControls.area, (unsigned)gRoomControls.room);
+        /* where the screen shows the room: the camera, room pixels (as the
+         * voxel tour logs it) -- a tool places the capture in the room by it */
+        fprintf(stderr, "[roomcap] view room=0x%02x/0x%02x scroll=%d,%d size=%d,%d\n",
+                (unsigned)gRoomControls.area, (unsigned)gRoomControls.room,
+                (int)(gRoomControls.scroll_x - gRoomControls.origin_x),
+                (int)(gRoomControls.scroll_y - gRoomControls.origin_y),
+                (int)gRoomControls.width, (int)gRoomControls.height);
         const char* dump = getenv("TMC_ROOMCAP_DUMP");
         if (dump && *dump)
             RoomCap_DumpPpu(dump);
         fflush(stderr);
-        _Exit(ok ? 0 : 2);
-    }
-
-    if (frame == 5000) {
-        fprintf(stderr, "[roomcap] timeout (booted=%d task=%u warp=%d)\n", booted, (unsigned)gMain.task, warp_done);
-        fflush(stderr);
-        _Exit(3);
+        _Exit(ok > 0 ? 0 : 2);
     }
 }

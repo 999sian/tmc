@@ -1,0 +1,7 @@
+# name<TAB>regions<TAB>roomcap env overrides (space-separated)
+# These bootstrap a fresh game: no developer save is required.
+file_select	all	TMC_ROOMCAP_FILESELECT=1
+hyrule_field	all	TMC_ROOMCAP_WARP=0x03,0x08,0x1d8,0x138,0
+inventory	all	TMC_ROOMCAP_WARP=0x03,0x08,0x1d8,0x138,0 TMC_ROOMCAP_MENU=1
+dialogue_bottom	usa,eu	TMC_ROOMCAP_WARP=0x03,0x08,0x1d8,0x138,0 TMC_ROOMCAP_MSG=0x501
+dialogue_top	usa,eu	TMC_ROOMCAP_WARP=0x03,0x08,0x1d8,0x138,0 TMC_ROOMCAP_MSG=0x501,1

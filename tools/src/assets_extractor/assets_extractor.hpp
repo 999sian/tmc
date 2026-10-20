@@ -17,6 +17,7 @@
 #include <cstring>
 #include <mutex>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <set>
@@ -294,6 +295,38 @@ inline uint32_t lz77_compressed_size(uint32_t rom_offset)
     return p - rom_offset;
 }
 
+/*
+ * The embedded asset index lists some paths twice with different sizes:
+ * the assets JSON files have per-region entries for the same file (e.g.
+ * gAreaRoomMap_CastorWilds_Main_bottom.bin.lz: 4220 vs 4216) and the generated
+ * index keeps both. Extracting both writes one loose file from two threads, so
+ * loose output (editable tree, --loose-assets) varied per run. Resolve each
+ * path to one entry before any parallel work, keeping the largest: the same
+ * rule PakBuilder::Write already applies to packed output, so loose and pak
+ * agree and pak output is unchanged. Returns entry indices, one per path, in
+ * index order.
+ */
+inline std::vector<u32> unique_asset_index_entries()
+{
+    const EmbeddedAssetEntry* idx = EmbeddedAssetIndex_Get();
+    const u32 count = EmbeddedAssetIndex_Count();
+    std::unordered_map<std::string_view, u32> chosen;
+    std::vector<u32> order;
+    order.reserve(count);
+    for (u32 i = 0; i < count; ++i) {
+        auto [it, inserted] = chosen.emplace(idx[i].path, i);
+        if (inserted) {
+            order.push_back(i);
+        } else if (idx[i].size > idx[it->second].size) {
+            it->second = i;
+        }
+    }
+    for (u32& i : order) {
+        i = chosen[idx[i].path];
+    }
+    return order;
+}
+
 inline bool json_asset_matches_variant(const nlohmann::json& asset, const std::string& variant)
 {
     if (!asset.contains("variants")) {
@@ -445,9 +478,8 @@ inline std::vector<AssetRecord> collect_embedded_asset_records(const Config& con
 {
     std::vector<AssetRecord> records;
     const EmbeddedAssetEntry* asset_index = EmbeddedAssetIndex_Get();
-    const u32 asset_count = EmbeddedAssetIndex_Count();
 
-    for (u32 i = 0; i < asset_count; ++i) {
+    for (const u32 i : unique_asset_index_entries()) {
         const EmbeddedAssetEntry& entry = asset_index[i];
         const std::string path = entry.path;
         if (!predicate(path)) {
@@ -2585,12 +2617,13 @@ inline bool extract_assets(const Config& config)
      * tracks the old CopyRuntimePassthroughAssets shape exactly (palettes,
      * code_*, etc. live editable-only). */
     const EmbeddedAssetEntry* idx = EmbeddedAssetIndex_Get();
-    const u32 idx_count = EmbeddedAssetIndex_Count();
+    const std::vector<u32> unique_entries = unique_asset_index_entries(); // one writer per path
+    const size_t idx_count = unique_entries.size();
 
     reporter.BeginPhase("sweep", idx_count);
     std::atomic<uint32_t> extracted_count{0};
     PortAssetLog::ParallelFor<size_t>(0, idx_count, [&](size_t k) {
-        const EmbeddedAssetEntry& entry = idx[k];
+        const EmbeddedAssetEntry& entry = idx[unique_entries[k]];
         const std::filesystem::path entry_path = entry.path;
         const std::string entry_path_str = entry_path.generic_string();
 

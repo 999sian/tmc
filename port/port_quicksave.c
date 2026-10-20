@@ -46,6 +46,14 @@
 #include <stdio.h>
 #include <time.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#else
+#include <unistd.h>
+extern int fileno(FILE*);
+#endif
+
 #include <SDL3/SDL.h>
 
 #include "structures.h"
@@ -389,7 +397,9 @@ static int WriteSlotToDisk(int slot) {
 
     char path[64];
     SlotFilename(slot, path, sizeof(path));
-    FILE* f = fopen(path, "wb");
+    char tmp[72];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    FILE* f = fopen(tmp, "wb");
     if (!f) {
         fprintf(stderr, "[quicksave] open %s for write failed\n", path);
         return 0;
@@ -399,18 +409,33 @@ static int WriteSlotToDisk(int slot) {
     const u32 total = (u32)s->bytes;
     const u64 saved_at = s->saved_at_unix;
     const u32 region_tag = ActiveRegionTag();
-    if (fwrite(&magic, sizeof(magic), 1, f) != 1 || fwrite(&version, sizeof(version), 1, f) != 1 ||
-        fwrite(&total, sizeof(total), 1, f) != 1 || fwrite(&saved_at, sizeof(saved_at), 1, f) != 1 ||
-        fwrite(s->saved_bases, sizeof(s->saved_bases), 1, f) != 1 ||
-        fwrite(&region_tag, sizeof(region_tag), 1, f) != 1) {
-        fprintf(stderr, "[quicksave] header write failed for %s\n", path);
-        fclose(f);
-        return 0;
+    int ok = fwrite(&magic, sizeof(magic), 1, f) == 1 && fwrite(&version, sizeof(version), 1, f) == 1 &&
+             fwrite(&total, sizeof(total), 1, f) == 1 && fwrite(&saved_at, sizeof(saved_at), 1, f) == 1 &&
+             fwrite(s->saved_bases, sizeof(s->saved_bases), 1, f) == 1 &&
+             fwrite(&region_tag, sizeof(region_tag), 1, f) == 1 &&
+             fwrite(s->snapshot, 1, s->bytes, f) == s->bytes;
+    if (ok)
+        ok = fflush(f) == 0;
+#ifdef _WIN32
+    if (ok)
+        ok = _commit(_fileno(f)) == 0;
+#else
+    if (ok)
+        ok = fsync(fileno(f)) == 0;
+#endif
+    if (fclose(f) != 0)
+        ok = 0;
+    /* Replace only after every write has reached disk; retain the old slot on failure. */
+    if (ok) {
+#ifdef _WIN32
+        ok = MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+        ok = rename(tmp, path) == 0;
+#endif
     }
-    const size_t written = fwrite(s->snapshot, 1, s->bytes, f);
-    fclose(f);
-    if (written != s->bytes) {
-        fprintf(stderr, "[quicksave] short write %s (%zu/%zu)\n", path, written, s->bytes);
+    if (!ok) {
+        fprintf(stderr, "[quicksave] disk save failed for %s; previous disk snapshot retained\n", path);
+        remove(tmp);
         return 0;
     }
     return 1;
@@ -497,9 +522,9 @@ int Port_QuickSave_SaveSlot(int slot) {
         return 0;
     if (!Snapshot_Capture(&sSlots[slot]))
         return 0;
-    /* Best-effort disk persistence — failure is non-fatal, the in-memory
-     * snapshot still works for the session. */
-    WriteSlotToDisk(slot);
+    /* Keep the RAM snapshot usable, but callers must know if it will survive exit. */
+    if (!WriteSlotToDisk(slot))
+        return 0;
     fprintf(stderr, "[quicksave] slot %d saved (%zu bytes)\n", slot, sSlots[slot].bytes);
     return 1;
 }

@@ -119,6 +119,18 @@ static void DrawRibbonDisplayTab(void) {
                        },
                        Port_Config_CycleVoxelPitch);
             ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("3D walls out of the way");
+            ImGui::TableSetColumnIndex(1);
+            {
+                bool wf = Port_Config_GetVoxelWallFade();
+                if (ImGui::Checkbox("##voxel_wall_fade", &wf))
+                    Port_Config_SetVoxelWallFade(wf);
+            }
+            RandoUi_HelpTooltip(
+                "A wall standing between the camera and Link or an enemy thins "
+                "to a dither around them, so they stay in sight from any camera "
+                "angle.");
+            ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0); ImGui::Text("3D wall height");
             ImGui::TableSetColumnIndex(1);
             {
@@ -428,6 +440,22 @@ static void DrawRibbonDisplayTab(void) {
             Port_PPU_SetPersistence(true, rho);               /* live */
         }
     }
+
+    ImGui::BeginDisabled(Port_Config_GetConsoleParity());
+    bool hdDialogue = Port_Config_GetHdDialogue();
+    if (ImGui::Checkbox("HD dialogue (original glyphs)", &hdDialogue)) {
+        Port_Config_SetHdDialogue(hdDialogue);
+    }
+    RandoUi_HelpTooltip("Smooths the contours of the original ROM lettering at the window's resolution. "
+                       "Preserves text timing and layout; unsupported effects retain the original text. "
+                       "Default off. Presentation filters, shader presets and 3D view retain original text.");
+    bool menuArt = Port_Config_GetMenuArtBackground();
+    if (ImGui::Checkbox("Widescreen menu artwork", &menuArt)) {
+        Port_Config_SetMenuArtBackground(menuArt);
+    }
+    RandoUi_HelpTooltip("Extends supported menus' decorative backgrounds into the side margins. "
+                       "Requires widescreen. LCD persistence, filters, shader presets and 3D view retain the selected fill.");
+    ImGui::EndDisabled();
 
     bool holdAdv = Port_Config_GetHoldToAdvanceText();
     if (ImGui::Checkbox("Hold to advance text", &holdAdv)) {

@@ -512,6 +512,20 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window, const u8* 
     const std::filesystem::path runtimeRoot = root / "assets" / regionSub;
     const std::filesystem::path editableRoot = root / "assets_src" / regionSub;
 
+    /* A previous launch may have exited while its background cleanup was
+     * still deleting the old editable tree; finish that off, also in the
+     * background (nothing reads "<region>.deleting"). */
+    {
+        const std::filesystem::path trash = AssetExtractorApi::DeletingPathFor(editableRoot);
+        std::error_code trash_ec;
+        if (std::filesystem::exists(trash, trash_ec)) {
+            std::thread([trash]() {
+                std::error_code ec;
+                std::filesystem::remove_all(trash, ec);
+            }).detach();
+        }
+    }
+
     /* Step 1: warm-launch fast path. Same ROM fingerprint + pack
      * mode recorded in assets/ means current runtime tree matches the
      * actually loaded ROM. Multi-region builds must not compare JP/EU
@@ -561,6 +575,7 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window, const u8* 
     opt.editable_root = editableRoot;
     opt.runtime_root = runtimeRoot;
     opt.runtime_only = true; // engine doesn't need the editable JSON tree
+    opt.background_cleanup = true; // delete it off the startup path
     opt.pack_runtime = packMode;
     opt.force = false;
     opt.verbose = false;

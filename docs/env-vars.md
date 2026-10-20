@@ -18,7 +18,7 @@ Warp arguments use the `area,room,x,y,layer` form (C integer literals, so
 | Variable | File(s) | Purpose |
 |---|---|---|
 | `TMC_BASEROM` | port/port_rom.c | Path to the ROM; checked before the exe-dir/cwd probe list. |
-| `TMC_AUTOPLAY` | port/port_main.c, port/port_update_check.c | Skip the prelaunch menu and the update check (headless/CI runs). |
+| `TMC_AUTOPLAY` | port/port_main.c, port/port_update_check.c | Skip the prelaunch menu and the update check (headless/CI runs). `--skip-launcher` and config.json's `"skip_launcher": true` both set this to `1` in-process at startup — same effect, discoverable without an env var. |
 | `TMC_NO_UPDATE_CHECK` | port/port_update_check.c | Skip the network update check. |
 | `TMC_AUTOLOAD` | src/fileselect.c | `0`-`2`: auto-select that file-select slot and start it. |
 | `TMC_ANDROID_RUNTIME_DIR` | port/port_asset_bootstrap.cpp | Android only: override the runtime asset directory. |
@@ -122,6 +122,9 @@ Warp arguments use the `area,room,x,y,layer` form (C integer literals, so
 | `TMC_ROOMCAP_WARP` | port/port_repro_roomcap.c | **(harness)** Target room for roomcap. |
 | `TMC_ROOMCAP_SETTLE` | port/port_repro_roomcap.c | **(harness)** Frames to wait after the warp before capturing (default 300). |
 | `TMC_ROOMCAP_OUT` | port/port_repro_roomcap.c | **(harness)** Output PNG path (default `roomcap.png`). |
+| `TMC_ROOMCAP_WINDOW` | port/port_ppu.cpp | **(harness)** Presentation test window `width,height` (240..7680 by 160..4320); scene runner uses `960,540`. |
+| `TMC_ROOMCAP_PRESENTATION` | port/port_repro_roomcap.c | **(harness)** Capture composed presentation, including overlays, instead of the base framebuffer. |
+| `TMC_ROOMCAP_MENU` | port/port_repro_roomcap.c | **(harness)** Open the inventory screen before room capture. |
 | `TMC_ROOMCAP_SAVE` | port/port_repro_roomcap.c | **(harness)** Write a quicksave at the warped spot and exit. |
 | `TMC_ROOMCAP_MSG` | port/port_repro_roomcap.c | **(harness)** Open message `idx[,posY]` before capturing. |
 | `TMC_ROOMCAP_MSG_ADVANCE` | port/port_repro_roomcap.c | **(harness)** Tap A to page through that message, stopping at a choice. |

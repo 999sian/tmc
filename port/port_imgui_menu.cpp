@@ -51,6 +51,9 @@ extern "C" void Port_ApplyLanguage(void);
 #include "port_gpu_renderer.h"
 #include "port_voxel.h"
 #include "port_prelaunch_logo.h"
+#include "port_ppu.h"
+#include "port_hd_text.h"
+#include "port_menu_background.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h" /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"         /* Port_TTS_* — accessibility tab + focus reader */
@@ -511,7 +514,10 @@ static void DoQuitToTitle(bool saveFirst) {
         /* Slot 0 is the F5/F6 quicksave slot — writing there mirrors
          * the user pressing F5 first. They can still F6-load it on
          * the next launch. */
-        Port_QuickSave_SaveSlot(0);
+        if (!Port_QuickSave_SaveSlot(0)) {
+            Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
+            return;
+        }
     }
     SetTask(0 /* TASK_TITLE */);
     Port_DebugMenu_Toggle(); /* close the F8 ribbon */
@@ -709,6 +715,14 @@ static void DrawRibbon(void) {
         }
         /* Footer with the mode toggle + hotkey hint. */
         ImGui::Separator();
+        /* Same persisted setting as the prelaunch card's "Additional
+         * Settings" checkbox — exposed here too since this menu is the
+         * only way to reach it once skip_launcher has already skipped
+         * the prelaunch screen once. */
+        bool skipLauncher = Port_Config_GetSkipLauncher();
+        if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
+            Port_Config_SetSkipLauncher(skipLauncher);
+        }
         bool useRibbon = sRibbonEnabled;
         if (ImGui::Checkbox("Ribbon mode (uncheck for classic menu)", &useRibbon)) {
             sRibbonEnabled = useRibbon;
@@ -1075,9 +1089,12 @@ static void DrawQuitModal(void) {
                            "your last in-game save is lost.");
         ImGui::Spacing();
         if (ImGui::Button("Save & Quit", ImVec2(140, 0))) {
-            Port_QuickSave_SaveSlot(0);
-            sQuitModalConfirmed = true;
-            ImGui::CloseCurrentPopup();
+            if (Port_QuickSave_SaveSlot(0)) {
+                sQuitModalConfirmed = true;
+                ImGui::CloseCurrentPopup();
+            } else {
+                Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Quit Without Saving", ImVec2(180, 0))) {
@@ -1326,6 +1343,21 @@ extern "C" bool Port_ImGui_Render(void) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
+    if (!Port_Config_GetConsoleParity() && !Port_PPU_HasPresentationFilter() &&
+        !Port_GlslpRuntime_IsActive() && !Port_Config_GetVoxelView()) {
+        float stage[4], frame[4];
+        int width = 0, pitch = 0;
+        const uint32_t* pixels = Port_PPU_GetOverlayFrame(stage, frame, &width, &pitch);
+        if (pixels) {
+            if (Port_Config_GetMenuArtBackground() && Port_Config_WidescreenEnabled() &&
+                !Port_PPU_LcdPersistenceEnabled())
+                Port_MenuBackground_Render(stage[0], stage[1], stage[2], stage[3],
+                                           frame[0], frame[1], frame[2], frame[3]);
+            if (Port_Config_GetHdDialogue())
+                Port_HDText_Draw(pixels, width, 160, pitch, frame[0], frame[1], frame[2], frame[3]);
+        }
+    }
+
     /* Defensive cleanup on close-transition (open → closed). Without
      * this, ImGui can retain nav focus / active-widget references to
      * ribbon widgets that won't be drawn on the very next frame —
@@ -1424,11 +1456,18 @@ extern "C" bool Port_ImGui_Render(void) {
                 DrawMenuPage(depth);
             }
             /* Classic mode has no ribbon footer, so without this it would be a
-             * one-way trap. Offer an explicit way back to ribbon mode. */
+             * one-way trap. Offer an explicit way back to ribbon mode. Also
+             * the only place classic-mode users can reach settings that live
+             * in the ribbon footer (e.g. skip_launcher), since classic mode
+             * has no other persistent settings surface. */
             ImGui::SetNextWindowBgAlpha(0.85f);
             if (ImGui::Begin("##classic_to_ribbon", nullptr,
                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
                                  ImGuiWindowFlags_NoSavedSettings)) {
+                bool skipLauncher = Port_Config_GetSkipLauncher();
+                if (ImGui::Checkbox("Skip launcher", &skipLauncher)) {
+                    Port_Config_SetSkipLauncher(skipLauncher); /* persist (#146) */
+                }
                 if (ImGui::SmallButton("Switch to ribbon mode")) {
                     sRibbonEnabled = true;
                     Port_Config_SetRibbonEnabled(true); /* persist (#146) */
@@ -1679,6 +1718,21 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
         }
         ImGui::Dummy(ImVec2(0, 14));
         (void)DrawRegionLanguageControls(true);
+
+        /* Persisted opt-out for this screen itself: writes config.json's
+         * "skip_launcher" immediately on toggle (same effect as
+         * --skip-launcher / TMC_AUTOPLAY=1, applied on the *next* run —
+         * see docs/env-vars.md). */
+        {
+            ImGui::Dummy(ImVec2(0, 10));
+            ImGui::SeparatorText("Additional Settings");
+            bool skipLauncher = Port_Config_GetSkipLauncher();
+            ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+            if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
+                Port_Config_SetSkipLauncher(skipLauncher);
+            }
+            ImGui::PopStyleColor();
+        }
 
         ImGui::Dummy(ImVec2(0, 22));
 

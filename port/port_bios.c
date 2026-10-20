@@ -377,7 +377,8 @@ static void Port_PumpEvents(void) {
             }
             if (e.key.key == SDLK_F5) {
                 extern int Port_QuickSave(void);
-                Port_QuickSave();
+                if (!Port_QuickSave())
+                    Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
                 continue;
             }
             if (e.key.key == SDLK_F6) {
@@ -396,7 +397,8 @@ static void Port_PumpEvents(void) {
                 const int slot = (int)(e.key.key - SDLK_F1) + 1;
                 const bool shift = (e.key.mod & SDL_KMOD_SHIFT) != 0;
                 if (shift) {
-                    Port_QuickSave_SaveSlot(slot);
+                    if (!Port_QuickSave_SaveSlot(slot))
+                        Port_DebugMenu_ToastFromExternal("Save failed. Check free space and folder permissions.");
                 } else {
                     Port_QuickSave_LoadSlot(slot);
                 }

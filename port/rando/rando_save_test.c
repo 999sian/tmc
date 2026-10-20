@@ -338,6 +338,22 @@ int main(void) {
     assert(ReadV8SlotCount(backup, 1) == RANDO_LOGIC_MAX_LOCATIONS + 1);
     assert(ReadV8SlotCount(backup2, 1) == RANDO_LOGIC_MAX_LOCATIONS + 2);
 
+    /* Legacy mode must still bound fields traversed by the shared loader. */
+    for (int logic_mode = 0; logic_mode <= 1; ++logic_mode) {
+        RandoSidecarSlot* corrupt = &sSidecar.slots[1];
+        memset(corrupt, 0, sizeof(*corrupt));
+        corrupt->active = 1;
+        corrupt->count = 1;
+        corrupt->logic_mode = logic_mode;
+        corrupt->logic_fingerprint = 1;
+        corrupt->logic_override_count = UINT16_MAX;
+        assert(WriteSidecarFile(path));
+        assert(!Port_RandoSave_LoadSlot(1));
+        assert(Port_RandoSave_LastLoadStatus() == PORT_RANDO_SAVE_INCOMPATIBLE);
+        assert(!sSidecar.slots[1].active);
+        assert(Port_RandoSave_LoadSlot(0));
+    }
+
     FILE* f = fopen(path, "ab");
     assert(f);
     assert(fputc(0, f) != EOF);

@@ -103,6 +103,7 @@ bool sDecoupleRender = true;
 bool sShowFps = false;
 /* Experimental 3D room view on the SDL_GPU backend (port_voxel.cpp). */
 bool sVoxelView = false;
+bool sVoxelWallFade = true;
 /* Voxel view camera elevation in degrees (F8 stepper). */
 int sVoxelPitch = 50;
 int sPreferredRegion = -1;
@@ -161,9 +162,16 @@ bool sRibbonCfg = true;        /* F8 menu style: ribbon (true) vs classic */
 bool sMenuHintSeen = false;    /* set once the F8/settings menu is first opened */
 float sMasterVolume = 1.0f;    /* game master volume [0,1]; 1.0 = unchanged */
 bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
+bool sHdDialogue = false;
+bool sMenuArtBackground = true;
 bool sRollAttackMacroEnabled = true;
 bool sFullscreen = false;
 bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
+/* Persisted equivalent of TMC_AUTOPLAY: skip the prelaunch Play screen (and,
+ * via the same env var, the update-check dialog) on every launch. --skip-launcher
+ * and this config both work by setting TMC_AUTOPLAY=1 in-process (port_main.c) —
+ * see docs/env-vars.md. */
+bool sSkipLauncher = false;
 float sAnalogDeadzone = 0.30f;     /* 360° stick deadzone magnitude [0..0.95] */
 std::string sShaderPreset;         /* path to active .glslp, empty = none */
 unsigned sRebornFeatures = 0;      /* bitmask of enabled Reborn features */
@@ -271,6 +279,7 @@ const BoolCfg kBoolCfg[] = {
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
     { "voxel_view", &sVoxelView, false },
+    { "voxel_wall_fade", &sVoxelWallFade, true },
     { "tts_enabled", &sTtsEnabled, false },
     { "a11y_cues", &sA11yCues, false },
     { "a11y_footsteps", &sA11yFootsteps, false },
@@ -293,9 +302,12 @@ const BoolCfg kBoolCfg[] = {
     { "ribbon_mode", &sRibbonCfg, true },
     { "menu_hint_seen", &sMenuHintSeen, false },
     { "hold_advance_text", &sHoldAdvanceText, false },
+    { "hd_dialogue", &sHdDialogue, false },
+    { "menu_art_background", &sMenuArtBackground, true },
     { "roll_attack_macro", &sRollAttackMacroEnabled, true },
     { "fullscreen", &sFullscreen, false },
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
+    { "skip_launcher", &sSkipLauncher, false },
     { "rando_enabled", &sRandoEnabled, false },
     { "rando_glitchless", &sRandoGlitchless, true },
     { "rando_obscure", &sRandoObscure, false },
@@ -858,6 +870,15 @@ extern "C" bool Port_Config_GetVoxelView(void) {
 extern "C" void Port_Config_SetVoxelView(bool on) {
     sVoxelView = on;
     sConfigJson["voxel_view"] = on;
+    SaveConfig();
+}
+/* Walls between the camera and Link or an enemy thin to a dither. */
+extern "C" bool Port_Config_GetVoxelWallFade(void) {
+    return sVoxelWallFade;
+}
+extern "C" void Port_Config_SetVoxelWallFade(bool on) {
+    sVoxelWallFade = on;
+    sConfigJson["voxel_wall_fade"] = on;
     SaveConfig();
 }
 /* Camera elevation presets, low (dramatic) to near top-down. */
@@ -1907,6 +1928,22 @@ extern "C" void Port_Config_SetMenuHintSeen(bool seen) {
 extern "C" bool Port_Config_GetHoldToAdvanceText(void) {
     return sHoldAdvanceText;
 }
+extern "C" bool Port_Config_GetHdDialogue(void) {
+    return sHdDialogue && !sConsoleParity;
+}
+extern "C" void Port_Config_SetHdDialogue(bool on) {
+    sHdDialogue = on;
+    sConfigJson["hd_dialogue"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetMenuArtBackground(void) {
+    return sMenuArtBackground && !sConsoleParity;
+}
+extern "C" void Port_Config_SetMenuArtBackground(bool on) {
+    sMenuArtBackground = on;
+    sConfigJson["menu_art_background"] = on;
+    SaveConfig();
+}
 extern "C" void Port_Config_SetHoldToAdvanceText(bool on) {
     sHoldAdvanceText = on;
     sConfigJson["hold_advance_text"] = on;
@@ -1946,6 +1983,14 @@ extern "C" bool Port_Config_GetFullscreenHideCursor(void) {
 extern "C" void Port_Config_SetFullscreenHideCursor(bool on) {
     sFullscreenHideCursor = on;
     sConfigJson["fullscreen_hide_cursor"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetSkipLauncher(void) {
+    return sSkipLauncher;
+}
+extern "C" void Port_Config_SetSkipLauncher(bool on) {
+    sSkipLauncher = on;
+    sConfigJson["skip_launcher"] = on;
     SaveConfig();
 }
 extern "C" float Port_Config_GetAnalogDeadzone(void) {

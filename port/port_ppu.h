@@ -17,6 +17,12 @@ void Port_PPU_Init(SDL_Window* window);
 // Read GBA DISPCNT mode bits and render the current frame via ViruaPPU,
 // then present it to the SDL window. Call once per VBlank.
 void Port_PPU_PresentFrame(void);
+/* Presentation geometry in logical window coordinates, shared by both overlay backends. */
+const uint32_t* Port_PPU_GetOverlayFrame(float stage[4], float frame[4], int* width, int* pitchPixels);
+/* Repro capture: queue/poll a PNG request (0 pending, 1 complete, -1 failed). */
+int Port_CapturePresentationPNG(const char* path);
+const char* Port_PPU_PresentationCapturePath(void);
+void Port_PPU_CompletePresentationCapture(SDL_Surface* surface);
 
 // Decoupled pacing: whether the next PresentFrame is the first present of
 // the current game tick. Temporal effects (LCD persistence) fold their
@@ -44,6 +50,7 @@ const char* Port_PPU_PresentationModeName(void);
 // SDL upload — needs internal-scale >= 2 to be visible.
 void Port_PPU_CycleFilter(int direction);
 const char* Port_PPU_FilterName(void);
+bool Port_PPU_HasPresentationFilter(void);
 
 // Toggle SDL vsync on the renderer. Used by VBlankIntrWait to disable the
 // display-refresh cap when fast-forwarding or when target FPS exceeds the
@@ -67,6 +74,7 @@ bool Port_PPU_ColorCorrectionEnabled(void);
 // Apply the colour-correction LUT (if enabled) to `count` ABGR8888 pixels.
 void Port_PPU_ColorCorrectBuffer(uint32_t* buf, int count);
 void Port_PPU_SetPersistence(bool enabled, float rho);
+bool Port_PPU_LcdPersistenceEnabled(void);
 
 // Cleanup
 void Port_PPU_Shutdown(void);

@@ -15,6 +15,15 @@ static void load(const char* path, const char* json) {
 int main(int argc, char** argv) {
     assert(argc == 2);
     const char* path = argv[1];
+    load(path, "{}");
+    assert(!Port_Config_GetHdDialogue());
+    assert(Port_Config_GetMenuArtBackground());
+    load(path, R"({"hd_dialogue":true,"menu_art_background":true,"console_parity":true})");
+    assert(!Port_Config_GetHdDialogue());
+    assert(!Port_Config_GetMenuArtBackground());
+    Port_Config_SetConsoleParity(false);
+    assert(Port_Config_GetHdDialogue());
+    assert(Port_Config_GetMenuArtBackground());
     load(path, R"({"window_scale":1e100,"frame_time_ns":-1,"practice_slowmo":1e-30})");
     assert(Port_Config_WindowScale() == 3);
     assert(Port_Config_FrameTimeNs() == 1000000000ULL / 60);

@@ -23,6 +23,9 @@
 bool Port_Voxel_Present(SDL_GPUCommandBuffer*, SDL_GPUTexture*, int, int) {
     return false;
 }
+bool Port_Voxel_IsDrawing(void) {
+    return false;
+}
 void Port_Voxel_Shutdown(void) {
 }
 PortVoxelTileAhead Port_Voxel_TileAhead(void) {
@@ -49,6 +52,7 @@ void Port_Voxel_RequestShot(const char*) {
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -85,6 +89,23 @@ namespace {
 
 /* ponytail: fixed distance/FOV; pitch comes from config (F8 stepper). */
 constexpr float kDistance = 250.0f;  /* camera distance from the scroll centre */
+
+/* Walls out of the way: room geometry between the camera and an actor
+ * (Link, any enemy) thins to a dither around the sight line, so the actor
+ * stays in sight from any camera angle -- voxel.frag fadeKeep(). Only what
+ * stands above the actor's feet: the floor under it never thins. Layout is
+ * voxel.frag's Fade block (std140). */
+constexpr int kFadeMaxActors = 16;
+constexpr float kFadeKeep = 0.2f;     /* share of a faded surface's pixels kept */
+constexpr float kFadeRadius = 20.0f;  /* px round the sight line: a character's width */
+constexpr float kFadeFeather = 14.0f; /* px over which it comes back */
+constexpr float kFadeAim = 12.0f;     /* sight line aims this far above the feet */
+struct PortVoxelFade {
+    float cam[4];     /* xyz camera, w 1 = on */
+    float fade[4];    /* keep, radius, feather, aim */
+    Sint32 count[4];  /* x: actors */
+    float actors[kFadeMaxActors][4]; /* xyz feet, world space */
+};
 constexpr float kFovYDeg = 45.0f;
 constexpr float kTopLayerLift = 16.0f; /* lifted overhead art floats one tile up */
 
@@ -257,6 +278,7 @@ bool Init(void) {
     fs.format = SDL_GPU_SHADERFORMAT_SPIRV;
     fs.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
     fs.num_samplers = 5;
+    fs.num_uniform_buffers = 1; /* PortVoxelFade */
     sFs = SDL_CreateGPUShader(sDev, &fs);
     if (!sVs || !sFs) {
         std::fprintf(stderr, "[voxel] shader load failed: %s\n", SDL_GetError());
@@ -424,23 +446,34 @@ int MapShownPct(const MapLayer& layer, const u16* map) {
     const int size = cnt >> 14;
     const int hofs = gIoMem[0x10 + bg * 4] | (gIoMem[0x11 + bg * 4] << 8);
     const int vofs = gIoMem[0x12 + bg * 4] | (gIoMem[0x13 + bg * 4] << 8);
-    const int rx0 = gRoomControls.scroll_x - gRoomControls.origin_x;
-    const int ry0 = gRoomControls.scroll_y - gRoomControls.origin_y;
-    int match = 0, total = 0;
-    for (int sy = 4; sy < 160; sy += 8) {
-        for (int sx = 4; sx < 240; sx += 8) {
-            const int rx = rx0 + sx, ry = ry0 + sy;
-            if (rx < 0 || ry < 0 || rx >= 1024 || ry >= 1024)
-                continue;
-            const int tx = ((sx + hofs) >> 3) & (size & 1 ? 63 : 31);
-            const int ty = ((sy + vofs) >> 3) & (size & 2 ? 63 : 31);
-            const int block = (tx >> 5) + (ty >> 5) * (size & 1 ? 2 : 1);
-            const u16 e = sb[(block * 1024 + (ty & 31) * 32 + (tx & 31)) & 0x3FFF];
-            match += e == map[(ry >> 3) * 128 + (rx >> 3)];
-            ++total;
+    /* gRoomControls.scroll is the game's camera; the BG offset registers are
+     * latched separately. While the camera moves the two can be a tile apart
+     * for a frame, which sank every sample and flashed the 2D view a few times
+     * a second. Score the camera's tile and its 8 neighbours, keep the best. */
+    int best = 0;
+    for (int oy = -8; oy <= 8; oy += 8) {
+        for (int ox = -8; ox <= 8; ox += 8) {
+            const int rx0 = gRoomControls.scroll_x - gRoomControls.origin_x + ox;
+            const int ry0 = gRoomControls.scroll_y - gRoomControls.origin_y + oy;
+            int match = 0, total = 0;
+            for (int sy = 4; sy < 160; sy += 8) {
+                for (int sx = 4; sx < 240; sx += 8) {
+                    const int rx = rx0 + sx, ry = ry0 + sy;
+                    if (rx < 0 || ry < 0 || rx >= 1024 || ry >= 1024)
+                        continue;
+                    const int tx = ((sx + hofs) >> 3) & (size & 1 ? 63 : 31);
+                    const int ty = ((sy + vofs) >> 3) & (size & 2 ? 63 : 31);
+                    const int block = (tx >> 5) + (ty >> 5) * (size & 1 ? 2 : 1);
+                    const u16 e = sb[(block * 1024 + (ty & 31) * 32 + (tx & 31)) & 0x3FFF];
+                    match += e == map[(ry >> 3) * 128 + (rx >> 3)];
+                    ++total;
+                }
+            }
+            if (total)
+                best = std::max(best, match * 100 / total);
         }
     }
-    return total ? match * 100 / total : 0;
+    return best;
 }
 bool BottomMapShown(void) {
     return MapShownPct(gMapBottom, gMapDataBottomSpecial) >= 50;
@@ -1211,6 +1244,30 @@ void Port_Voxel_RequestShot(const char* path) {
     sShotRequested = true;
 }
 
+/* Link and every enemy, feet in world space (X east, Y up, Z south, room
+ * pixels): what the walls fade for. */
+static void GatherFadeActors(PortVoxelFade& f) {
+    int n = 0;
+    auto add = [&](const Entity& e) {
+        if (n >= kFadeMaxActors)
+            return;
+        f.actors[n][0] = (float)(e.x.HALF.HI - gRoomControls.origin_x);
+        f.actors[n][1] = (e.collisionLayer == 2 ? kTopLayerLift : 0.0f) +
+                         std::max(0.0f, -(float)e.z.HALF.HI); /* match the sprite layer and jump */
+        f.actors[n][2] = (float)(e.y.HALF.HI - gRoomControls.origin_y);
+        f.actors[n][3] = 0.0f;
+        ++n;
+    };
+    add(gPlayerEntity.base);
+    for (int l = 0; l < 9; ++l) {
+        LinkedList* list = &gEntityLists[l];
+        for (Entity* e = list->first; e && e != (Entity*)list; e = e->next)
+            if (e->kind == ENEMY)
+                add(*e);
+    }
+    f.count[0] = n;
+}
+
 PortVoxelTileAhead Port_Voxel_TileAhead(void) {
     PortVoxelTileAhead r = {};
     if (!SceneApplicable())
@@ -1259,11 +1316,33 @@ void Port_Voxel_SetAreaWallTiles(int area, int tiles) {
     SaveShapes();
 }
 
-bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
+/* TMC_VOXEL_DEBUG=1: log each 2D fallback and geometry rebuild, to chase flicker. */
+static bool VoxelDebug(void) {
+    static int on = -1;
+    if (on < 0) {
+        const char* e = std::getenv("TMC_VOXEL_DEBUG");
+        on = (e && *e && *e != '0') ? 1 : 0;
+    }
+    return on == 1;
+}
+
+static bool sDrewLastFrame = false;
+
+static bool PresentImpl(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
+    static unsigned sPresentFrame = 0;
+    ++sPresentFrame;
     if (sShotPending)
         WriteShot();
-    if (!Port_Config_GetVoxelView() || !SceneApplicable())
+    if (!Port_Config_GetVoxelView())
         return false;
+    if (!SceneApplicable()) {
+        if (VoxelDebug())
+            fprintf(stderr, "[voxel-dbg] f=%u 2D fallback: task=%d state=%d substate=%d bg=%p w=%d h=%d bottomPct=%d\n",
+                    sPresentFrame, (int)gMain.task, (int)gMain.state, (int)gMain.substate,
+                    (void*)gMapBottom.bgSettings, (int)gRoomControls.width, (int)gRoomControls.height,
+                    gMapBottom.bgSettings ? MapShownPct(gMapBottom, gMapDataBottomSpecial) : -1);
+        return false;
+    }
     if (!sInitTried)
         sReady = Init();
     if (!sReady || !EnsureDepth(swapW, swapH))
@@ -1286,6 +1365,9 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
     else if (sSettleFrames > 0 && --sSettleFrames == 0)
         mapDirty = true;
     if (mapDirty) {
+        if (VoxelDebug())
+            fprintf(stderr, "[voxel-dbg] f=%u rebuild (%s)\n", sPresentFrame,
+                    mapKey != sMapKey ? "map changed" : "settle");
         BuildMap();
         sMapKey = mapKey;
     }
@@ -1300,6 +1382,10 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
         ObjRect o;
         if (!DecodeObj(i, obj1d, o))
             continue;
+        if (tag.parked) { /* beyond OAM's reach: port_draw.c parked it, real spot here */
+            o.x = tag.trueX;
+            o.y = tag.trueY;
+        }
         const float x0 = o.x + scrollX, x1 = x0 + o.w;
         const int sy0 = o.y, sy1 = sy0 + o.h;
         const float elev = tag.layer == 2 ? kTopLayerLift : 0.0f;
@@ -1523,6 +1609,18 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
         SDL_GPUBufferBinding vb = { sVertBuf, 0 };
         SDL_BindGPUVertexBuffers(rp, 0, &vb, 1);
 
+        /* The camera, for the fade (the 3D pass below); the shader thins
+         * room geometry (kind 0) only, never the backdrop, HUD or sprites. */
+        const float target3[3] = { scrollX + viewW * 0.5f, 0.0f, scrollY + 80.0f };
+        const float eye[3] = { target3[0], kDistance * std::sin(pitch), target3[2] + kDistance * std::cos(pitch) };
+        static PortVoxelFade fade;
+        fade.cam[0] = eye[0], fade.cam[1] = eye[1], fade.cam[2] = eye[2];
+        fade.cam[3] = Port_Config_GetVoxelWallFade() ? 1.0f : 0.0f;
+        fade.fade[0] = kFadeKeep, fade.fade[1] = kFadeRadius;
+        fade.fade[2] = kFadeFeather, fade.fade[3] = kFadeAim;
+        GatherFadeActors(fade);
+        SDL_PushGPUFragmentUniformData(cmd, 0, &fade, sizeof(fade));
+
         /* Backdrop: BG3 stretched over the whole target at the far plane. */
         SDL_GPUViewport vp = { 0, 0, (float)tw, (float)th, 0, 1 };
         SDL_SetGPUViewport(rp, &vp);
@@ -1534,8 +1632,6 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
         }
 
         /* 3D pass over the whole target. */
-        const float target3[3] = { scrollX + viewW * 0.5f, 0.0f, scrollY + 80.0f };
-        const float eye[3] = { target3[0], kDistance * std::sin(pitch), target3[2] + kDistance * std::cos(pitch) };
         const Mat4 mvp = Mul(Perspective(kFovYDeg * 3.14159265f / 180.0f, (float)tw / (float)th, 32.0f, 4000.0f),
                              LookAt(eye, target3));
         SDL_PushGPUVertexUniformData(cmd, 0, mvp.m, sizeof(mvp.m));
@@ -1589,6 +1685,15 @@ bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swa
         sShotPending = true; /* written next frame, after the GPU finished */
     }
     return true;
+}
+
+bool Port_Voxel_Present(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* swap, int swapW, int swapH) {
+    sDrewLastFrame = PresentImpl(cmd, swap, swapW, swapH);
+    return sDrewLastFrame;
+}
+
+bool Port_Voxel_IsDrawing(void) {
+    return sDrewLastFrame;
 }
 
 void Port_Voxel_Shutdown(void) {

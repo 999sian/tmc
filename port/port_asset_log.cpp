@@ -66,7 +66,8 @@ void Reporter::BeginPhase(std::string_view name, std::size_t total)
     phase_ = std::string(name);
     total_ = total;
     count_.store(0, std::memory_order_relaxed);
-    last_redraw_ = std::chrono::steady_clock::now() - kRedrawInterval;
+    phase_start_ = std::chrono::steady_clock::now();
+    last_redraw_ = phase_start_ - kRedrawInterval;
     phase_active_ = true;
     std::fprintf(stdout, "%s: 0/%zu\n", phase_.c_str(), total_);
     std::fflush(stdout);
@@ -107,7 +108,8 @@ void Reporter::EndPhase()
         return;
     }
 
-    std::fprintf(stdout, "%s: %zu/%zu\n", phase_.c_str(), total_, total_);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - phase_start_);
+    std::fprintf(stdout, "%s: %zu/%zu (%lld ms)\n", phase_.c_str(), total_, total_, static_cast<long long>(ms.count()));
     std::fflush(stdout);
 
     /* Fire one final progress event so embedders see done == total

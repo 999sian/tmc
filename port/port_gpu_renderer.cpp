@@ -17,6 +17,7 @@
 #include "port_imgui_menu.h"
 #include "port_runtime_config.h"
 #include "port_voxel.h"
+#include "port_ppu.h"
 
 #ifndef TMC_GPU_RENDERER
 
@@ -697,6 +698,8 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         SDL_GPURenderPass* orp = SDL_BeginGPURenderPass(cmd, &ovl, 1, nullptr);
         Port_ImGui_RenderDrawDataGpu(cmd, orp);
         SDL_EndGPURenderPass(orp);
+        if (Port_PPU_PresentationCapturePath())
+            Port_PPU_CompletePresentationCapture(nullptr);
         SDL_SubmitGPUCommandBuffer(cmd);
         return true;
     }
@@ -722,6 +725,8 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         SDL_GPURenderPass* orp = SDL_BeginGPURenderPass(cmd, &ovl, 1, nullptr);
         Port_ImGui_RenderDrawDataGpu(cmd, orp);
         SDL_EndGPURenderPass(orp);
+        if (Port_PPU_PresentationCapturePath())
+            Port_PPU_CompletePresentationCapture(nullptr);
         SDL_SubmitGPUCommandBuffer(cmd);
         return true;
     }
@@ -775,8 +780,21 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
             clearColor.b = (float)b / 255.0f;
         }
     }
+    SDL_GPUTexture* captureTexture = nullptr;
+    if (Port_PPU_PresentationCapturePath()) {
+        /* Swapchain textures are write-only; capture through a temporary render target. */
+        SDL_GPUTextureCreateInfo info = {};
+        info.type = SDL_GPU_TEXTURETYPE_2D;
+        info.format = SDL_GetGPUSwapchainTextureFormat(sDevice, sWindow);
+        info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        info.width = swap_w; info.height = swap_h;
+        info.layer_count_or_depth = 1; info.num_levels = 1;
+        captureTexture = SDL_CreateGPUTexture(sDevice, &info);
+        if (!captureTexture)
+            Port_PPU_CompletePresentationCapture(nullptr);
+    }
     SDL_GPUColorTargetInfo color = {};
-    color.texture = swap_tex;
+    color.texture = captureTexture ? captureTexture : swap_tex;
     color.clear_color = clearColor;
     color.load_op = SDL_GPU_LOADOP_CLEAR;
     color.store_op = SDL_GPU_STOREOP_STORE;
@@ -930,7 +948,59 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
 
     SDL_EndGPURenderPass(rp);
 
+    if (captureTexture) {
+        SDL_GPUBlitInfo blit = {};
+        blit.source.texture = captureTexture;
+        blit.source.w = swap_w; blit.source.h = swap_h;
+        blit.destination.texture = swap_tex;
+        blit.destination.w = swap_w; blit.destination.h = swap_h;
+        blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+        blit.filter = SDL_GPU_FILTER_NEAREST;
+        SDL_BlitGPUTexture(cmd, &blit);
+        const SDL_GPUTextureFormat format = SDL_GetGPUSwapchainTextureFormat(sDevice, sWindow);
+        const bool bgra = format == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM ||
+                          format == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB;
+        const bool rgba = format == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM ||
+                          format == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+        SDL_GPUTransferBufferCreateInfo info = {};
+        info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+        info.size = swap_w * swap_h * 4;
+        SDL_GPUTransferBuffer* download = (rgba || bgra) ? SDL_CreateGPUTransferBuffer(sDevice, &info) : nullptr;
+        if (download) {
+            SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+            SDL_GPUTextureRegion source = {};
+            source.texture = captureTexture;
+            source.w = swap_w; source.h = swap_h; source.d = 1;
+            SDL_GPUTextureTransferInfo destination = {};
+            destination.transfer_buffer = download;
+            SDL_DownloadFromGPUTexture(copy, &source, &destination);
+            SDL_EndGPUCopyPass(copy);
+            SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+            SDL_Surface* shot = nullptr;
+            if (fence && SDL_WaitForGPUFences(sDevice, true, &fence, 1)) {
+                void* pixels = SDL_MapGPUTransferBuffer(sDevice, download, false);
+                if (pixels)
+                    shot = SDL_CreateSurfaceFrom(swap_w, swap_h,
+                                                bgra ? SDL_PIXELFORMAT_BGRA32 : SDL_PIXELFORMAT_RGBA32,
+                                                pixels, swap_w * 4);
+                Port_PPU_CompletePresentationCapture(shot);
+                SDL_DestroySurface(shot);
+                if (pixels)
+                    SDL_UnmapGPUTransferBuffer(sDevice, download);
+            } else {
+                Port_PPU_CompletePresentationCapture(nullptr);
+            }
+            if (fence)
+                SDL_ReleaseGPUFence(sDevice, fence);
+            SDL_ReleaseGPUTransferBuffer(sDevice, download);
+            SDL_ReleaseGPUTexture(sDevice, captureTexture);
+            return fence != nullptr;
+        }
+        Port_PPU_CompletePresentationCapture(nullptr);
+    }
     SDL_SubmitGPUCommandBuffer(cmd);
+    if (captureTexture)
+        SDL_ReleaseGPUTexture(sDevice, captureTexture);
     return true;
 }
 

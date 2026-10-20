@@ -107,8 +107,7 @@ static void DrawRibbonSavesTab(void) {
             // Column 2: Actions
             ImGui::TableSetColumnIndex(1);
             if (ImGui::Button("Save")) {
-                if (Port_QuickSave_SaveSlot(s))
-                    Port_DebugMenu_ToastFromExternal("Saved");
+                Port_DebugMenu_ToastFromExternal(Port_QuickSave_SaveSlot(s) ? "Saved" : "Save failed");
             }
             ImGui::SameLine();
             if (Port_QuickSave_HasSlot(s)) {

@@ -756,7 +756,10 @@ nlohmann::json BuildSourceState(const std::filesystem::path& sourceRoot) {
         }
         Entry e;
         e.absolute = dirent.path();
-        e.relative = std::filesystem::relative(dirent.path(), sourceRoot).generic_string();
+        /* lexically_relative, not relative(): the iterator already yields
+         * sourceRoot-prefixed paths, and relative() canonicalizes both
+         * sides on disk per file — ~12 s for the ~24k-file tree on Windows. */
+        e.relative = dirent.path().lexically_relative(sourceRoot).generic_string();
         entries.push_back(std::move(e));
     }
 
@@ -2145,12 +2148,18 @@ bool BuildRuntimeAssets(const std::filesystem::path& sourceRoot, const std::file
 }
 
 bool WriteBuildStateFile(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
-                         std::string* error) {
+                         std::string* error, bool listSources) {
     if (!std::filesystem::exists(sourceRoot) || !std::filesystem::is_directory(sourceRoot)) {
         SetError(error, "source asset root does not exist");
         return false;
     }
     nlohmann::json state;
+    if (!listSources) {
+        state["format"] = "tmc_asset_build_state_v1";
+        state["builder_version"] = kBuildStateVersion;
+        state["files"] = nlohmann::json::array();
+        return WriteJsonFile(outputRoot / kBuildStateFile, state, error);
+    }
     try {
         state = BuildSourceState(sourceRoot);
     } catch (const std::exception& e) {

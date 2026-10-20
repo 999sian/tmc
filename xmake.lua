@@ -1,6 +1,6 @@
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
-local TMC_PC_VERSION = "0.9.5"
+local TMC_PC_VERSION = "0.9.6"
 set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
@@ -293,13 +293,20 @@ target_end()
 -- asset_processor
 target("asset_processor")
     set_kind("binary")
-    set_languages("cxx17")
+    set_languages("c11", "cxx17")
     set_targetdir(tools_bin)
     add_files("tools/src/asset_processor/*.cpp")
     add_files("tools/src/asset_processor/assets/*.cpp")
+    -- gbagfx and aif2pcm are linked in and called in-process (util.cpp)
+    -- instead of being launched once per graphics/map/sample asset.
+    add_files("tools/src/gbagfx/*.c", {defines = "main=gbagfx_main"})
+    add_files("tools/src/aif2pcm/*.c", {defines = "main=aif2pcm_main"})
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
-    add_packages("nlohmann_json")
+    add_packages("nlohmann_json", "libpng", "zlib")
+    if is_plat("linux") then
+        add_syslinks("pthread") -- std::thread worker pool; needed before glibc 2.34
+    end
     add_mingw_static_cpp_runtime()
 target_end()
 
@@ -443,7 +450,13 @@ task("extract_assets")
         -- Run asset_processor extract
         print("[3/3] Running asset_processor extract (verbose mode)...")
         print("-------------------------------------------")
-        os.execv("tools/bin/asset_processor", {"-v", "extract", game_version, build_assets_dir})
+        -- TMC_ASSET_FORCE_EXTRACT=1 re-extracts every file, even ones that look
+        -- up to date (build.py sets it when the asset inputs changed).
+        local extract_args = {"-v", "extract", game_version, build_assets_dir}
+        if os.getenv("TMC_ASSET_FORCE_EXTRACT") == "1" then
+            table.insert(extract_args, 1, "-f")
+        end
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), extract_args)
         print("-------------------------------------------")
         
         print("===========================================")
@@ -483,7 +496,7 @@ task("convert_assets")
         -- Run asset_processor convert
         print("[3/3] Running asset_processor convert (verbose mode)...")
         print("-------------------------------------------")
-        os.execv("tools/bin/asset_processor", {"-v", "convert", game_version, build_assets_dir})
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), {"-v", "convert", game_version, build_assets_dir})
         print("-------------------------------------------")
         
         print("===========================================")
@@ -514,7 +527,7 @@ task("build_assets")
         os.mkdir(build_assets_dir)
         
         -- Run asset_processor build
-        os.execv("tools/bin/asset_processor", {"build", game_version, build_assets_dir})
+        os.execv(path.join(os.projectdir(), "tools", "bin", "asset_processor" .. (is_host("windows") and ".exe" or "")), {"build", game_version, build_assets_dir})
         
         print("Assets built to " .. build_assets_dir)
     end)
@@ -709,6 +722,8 @@ target("tmc_pc")
     add_files("port/port_runtime_config.cpp")
     add_files("port/port_debug_menu.cpp")
     add_files("port/port_imgui_menu.cpp")
+    add_files("port/port_hd_text.cpp")
+    add_files("port/port_menu_background.c", "port/port_menu_background_imgui.cpp")
     add_files("port/port_level_editor.cpp")
     add_files("port/port_prelaunch_logo.cpp")
     -- Embed docs/picori-logo.png into the binary so the prelaunch
