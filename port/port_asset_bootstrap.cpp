@@ -281,7 +281,11 @@ template <typename Body> void PaintFrame(SDL_Window* window, SDL_Color bgColor, 
 
     int width = 0;
     int height = 0;
-    SDL_GetWindowSize(window, &width, &height);
+    /* Draw in render-output pixels: on HiDPI windows the logical window
+     * size is smaller than the renderer's coordinate space. */
+    if (!SDL_GetCurrentRenderOutputSize(renderer, &width, &height) || width <= 0 || height <= 0) {
+        SDL_GetWindowSize(window, &width, &height);
+    }
     const float fw = static_cast<float>(width);
     const float fh = static_cast<float>(height);
     const float scale = std::max(2.0f, std::round(fw / 240.0f));

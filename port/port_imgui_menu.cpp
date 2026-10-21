@@ -1505,7 +1505,7 @@ extern "C" bool Port_ImGui_Render(void) {
 #endif
     if (sRenderer) {
         int w = 0, h = 0;
-        SDL_GetWindowSize(sWindow, &w, &h);
+        SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h);
         Port_LevelEditor_Render(sRenderer, w, h);
     }
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sRenderer);

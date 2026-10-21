@@ -587,6 +587,15 @@ int main(int argc, char* argv[]) {
      * window flags went from 0x220 → 0x222 across the first
      * SDL_CreateRenderer call, with driver=opengl. */
     SDL_Window* window = NULL;
+    /* macOS: without SDL_WINDOW_HIGH_PIXEL_DENSITY the window gets a 1x
+     * backing store and Retina displays upscale it, blurring the game,
+     * filters and F8 menu. Presentation already sizes itself from pixel
+     * dimensions (render output / swapchain), so opting in is safe. */
+#if defined(__APPLE__)
+#define PORT_WINDOW_BASE_FLAGS (SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY)
+#else
+#define PORT_WINDOW_BASE_FLAGS SDL_WINDOW_RESIZABLE
+#endif
 #ifndef TMC_GPU_RENDERER
     SDL_Renderer* prerenderer = NULL;
 #endif
@@ -610,7 +619,7 @@ int main(int argc, char* argv[]) {
      * dummy/no-Vulkan systems. Forced-GPU keeps the Vulkan flag on non-Apple
      * platforms to preserve the explicit swapchain path; Auto tries GPU later
      * from a plain window and falls back cleanly in Port_PPU_Init. */
-    SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
+    SDL_WindowFlags window_flags = PORT_WINDOW_BASE_FLAGS;
 #if !defined(__APPLE__)
     if (Port_Config_RenderBackend() == PORT_RENDER_BACKEND_GPU) {
         window_flags |= SDL_WINDOW_VULKAN;
@@ -625,7 +634,7 @@ int main(int argc, char* argv[]) {
     }
 #else
     if (!SDL_CreateWindowAndRenderer(window_title, window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
-                                     SDL_WINDOW_RESIZABLE, &window, &prerenderer)) {
+                                     PORT_WINDOW_BASE_FLAGS, &window, &prerenderer)) {
         fprintf(stderr, "SDL_CreateWindowAndRenderer Error: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
@@ -646,6 +655,13 @@ int main(int argc, char* argv[]) {
     SDL_ShowWindow(window);
     SDL_RaiseWindow(window);
     SDL_SyncWindow(window);
+    {
+        int pw = 0, ph = 0, lw = 0, lh = 0;
+        SDL_GetWindowSize(window, &lw, &lh);
+        SDL_GetWindowSizeInPixels(window, &pw, &ph);
+        fprintf(stderr, "[window] %dx%d points, %dx%d pixels (density %.2f)\n", lw, lh, pw, ph,
+                SDL_GetWindowPixelDensity(window));
+    }
 
 #ifdef launcher
     if (!Port_RunBootstrapLauncher(window)) {
