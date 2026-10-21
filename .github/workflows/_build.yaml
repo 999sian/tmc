@@ -710,6 +710,33 @@ jobs:
           path: ${{ env.archive_name }}
           if-no-files-found: error
 
+      # Picori.app: the same public payload as the tarball, wrapped in an
+      # ad-hoc-signed bundle so macOS users can double-click it instead of
+      # running tmc_pc from a terminal. Shipped as its own *-app.tar.gz so
+      # the release upload's *.tar.gz glob picks it up on macOS legs only.
+      - name: Create macOS app bundle archive
+        if: matrix.os_name == 'macos'
+        shell: bash
+        env:
+          VERSION_LABEL: ${{ inputs.version_label }}
+        run: |
+          VERSION="$(sed -n 's/^local TMC_PC_VERSION = "\(.*\)"/\1/p' xmake.lua)"
+          python3 tools/make_macos_app.py --binary "build/pc/${{ matrix.exe_name }}" \
+            --out app-artifact/Picori.app --version "$VERSION"
+          codesign --verify --strict app-artifact/Picori.app
+          APP_ARCHIVE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${{ matrix.arch }}-${VERSION_LABEL}-app.tar.gz"
+          # No AppleDouble ._* entries for extended attributes.
+          COPYFILE_DISABLE=1 tar -czf "$APP_ARCHIVE" -C app-artifact Picori.app
+          echo "app_archive_name=$APP_ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Upload macOS app bundle
+        if: matrix.os_name == 'macos'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ env.app_archive_name }}
+          path: ${{ env.app_archive_name }}
+          if-no-files-found: error
+
       # Whole-program ABI gate (GCC LTO -Werror=lto-type-mismatch). Runs last:
       # it force-rebuilds tmc_pc, and set_targetdir pins the binary to build/pc,
       # so it would clobber the shipped binary if run before the artifact is

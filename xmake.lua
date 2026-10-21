@@ -752,6 +752,7 @@ target("tmc_pc")
     add_files("port/port_asset_pak_loader.cpp")
     add_files("port/port_exe_path.cpp")   -- shared executable-directory query (C++)
     add_files("port/port_debug_verbose.c")  -- per-frame log gate, env-controlled
+    add_files("port/port_macos_bundle.c")  -- Picori.app: data dir + defaults staging (no-op elsewhere)
     add_files("port/port_rom_picker.c")     -- SDL3 file picker when no ROM is found
     -- In-process randomizer (port/rando/); GPL-3.0 provenance is in THIRD-PARTY-LICENSES.md.
     add_files("port/rando/rando.cpp")

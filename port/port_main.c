@@ -24,6 +24,7 @@
 #endif
 #include "port_ppu.h"
 #include "port_rom.h"
+#include "port_macos_bundle.h"
 #include "port_rom_picker.h"
 #include "port_runtime_config.h"
 #include "port_tts.h"
@@ -422,6 +423,10 @@ int main(int argc, char* argv[]) {
     }
     Port_AndroidStageDefaults();
 #endif
+
+    /* Picori.app: move CWD to ~/Library/Application Support/Picori before
+     * anything below opens a CWD-relative file. No-op outside a bundle. */
+    Port_MacBundle_Init();
 
     fprintf(stderr, "Initializing port layer...\n");
     { Port_DebugVerbose_Init(); }

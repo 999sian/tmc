@@ -83,6 +83,12 @@ cd dist/USA
 ./tmc_pc
 ```
 
+On macOS, `build.py` also produces `dist/<VERSION>/Picori.app`, so you can
+double-click it instead of running `tmc_pc` from a terminal. The app keeps its
+ROM, saves, config, asset cache and `picori.log` in
+`~/Library/Application Support/Picori`. On first launch, pick your ROM
+(it is copied there) or drop it into that folder as `baserom.gba`.
+
 Saves are written to `tmc.sav` in the working directory, in the same byte
 order mGBA/VBA-M use — a Minish Cap `.sav` from those emulators can be dropped
 in as `tmc.sav` (and `tmc.sav` works in them, renamed to match the ROM).

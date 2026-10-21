@@ -811,6 +811,26 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     (dist_dir / ".assets_fingerprint").write_text(assets_fingerprint + "\n")
     return dst_bin
 
+def tmc_pc_version() -> str:
+    """TMC_PC_VERSION from xmake.lua (`local TMC_PC_VERSION = "x.y.z"`)."""
+    import re
+    m = re.search(r'^local TMC_PC_VERSION = "([^"]+)"', (REPO_ROOT / "xmake.lua").read_text(), re.MULTILINE)
+    return m.group(1) if m else "0.0.0"
+
+def make_macos_app(exe: Path) -> Optional[Path]:
+    """Wrap dist/<version>/tmc_pc into dist/<version>/Picori.app."""
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    try:
+        import make_macos_app as bundler
+        app = bundler.build_app(exe, exe.parent / "Picori.app", tmc_pc_version())
+    except Exception as e:
+        warn(f"Picori.app not created: {e}")
+        return None
+    finally:
+        sys.path.pop(0)
+    ok(f"App bundle →  {app.relative_to(REPO_ROOT)}")
+    return app
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
@@ -948,6 +968,13 @@ def main():
         results[v] = build_version(v, env, non_interactive=non_interactive, slim=slim,
                                    multi_region=not single_region)
 
+    apps = {}
+    if PLATFORM == "Darwin":
+        section("macOS app bundle")
+        for v, exe in results.items():
+            if exe:
+                apps[v] = make_macos_app(exe)
+
     section("Done")
     any_ok = False
     for v, exe in results.items():
@@ -960,6 +987,8 @@ def main():
             info(f"    cd {rel}")
             run_cmd = f".\\{EXE_NAME}" if PLATFORM == "Windows" else f"./{EXE_NAME}"
             info(f"    {run_cmd}")
+            if apps.get(v):
+                info(f"  or open {apps[v].relative_to(REPO_ROOT)} (data: ~/Library/Application Support/Picori)")
             blank()
         else:
             err(f"{v} — build failed")
