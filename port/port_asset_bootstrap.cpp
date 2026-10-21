@@ -6,6 +6,7 @@
 #include "port_asset_bootstrap.h"
 #include "port_asset_pipeline.hpp"
 #include "port_exe_path.hpp"
+#include "port_macos_bundle.h"
 
 #include <SDL3/SDL.h>
 
@@ -122,6 +123,11 @@ std::filesystem::path PreferredAssetRoot() {
         return androidCwd;
     }
 #endif
+
+    /* Picori.app: never write the cache into the (signed) bundle. */
+    if (const char* bundleData = Port_MacBundle_DataDir()) {
+        return std::filesystem::path(bundleData);
+    }
 
     const auto exeDir = GetExecutableDirectory();
     if (exeDir.has_value()) {

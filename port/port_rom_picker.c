@@ -15,6 +15,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "port_rom_picker.h"
+#include "port_macos_bundle.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_dialog.h>
@@ -420,7 +421,11 @@ static int ResolveInstallPath(char* dst, size_t dst_len) {
     return 0;
 #else
     char exedir[4096];
-    if (GetExeDir(exedir, sizeof(exedir)) != 0)
+    /* Picori.app: install into the data dir, not the signed bundle. */
+    const char* bundleData = Port_MacBundle_DataDir();
+    if (bundleData) {
+        snprintf(exedir, sizeof(exedir), "%s", bundleData);
+    } else if (GetExeDir(exedir, sizeof(exedir)) != 0)
         return -1;
     snprintf(dst, dst_len, "%s%cbaserom.gba", exedir,
 #ifdef _WIN32

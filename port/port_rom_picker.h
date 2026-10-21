@@ -6,7 +6,8 @@ extern "C" {
 #endif
 
 /* Opens the native file picker, validates the selected ROM, and installs
- * it next to the executable as baserom.gba. Returns 0 on success. */
+ * it as baserom.gba next to the executable (in the data dir for
+ * Picori.app). Returns 0 on success. */
 int Port_RomPicker_PromptAndInstall(void);
 
 #ifdef __cplusplus
