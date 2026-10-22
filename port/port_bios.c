@@ -126,8 +126,31 @@ static void Port_UpdateInput(void) {
          * the game doesn't observe stray input from key presses we routed
          * to the overlay. The soft-slot configuration overlay piggybacks
          * on this behaviour while it's the active focus. */
-        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen() ||
-            Port_RandoFileMenu_IsOpen() || Port_LevelEditor_IsOpen()) {
+        static bool sWasOverlayOpen = false;
+        static bool sDebounceRelease = false;
+        const bool overlayOpen = Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() ||
+                                  Port_InGameSettingsModalIsOpen() || Port_RandoFileMenu_IsOpen() ||
+                                  Port_LevelEditor_IsOpen();
+        if (sWasOverlayOpen && !overlayOpen) {
+            /* Port_Config_InputPressed() polls hardware state, not edges, so
+             * whatever button just closed the overlay (A, Select+Start, ...)
+             * is still "pressed" this instant and would otherwise leak
+             * straight into the game. Keep masking until it's released. */
+            sDebounceRelease = true;
+        }
+        sWasOverlayOpen = overlayOpen;
+        if (sDebounceRelease && !overlayOpen) {
+            bool anyMappedHeld = false;
+            for (size_t i = 0; i < sizeof(sInputMap) / sizeof(sInputMap[0]); i++) {
+                if (Port_Config_InputPressed(sInputMap[i].input)) {
+                    anyMappedHeld = true;
+                    break;
+                }
+            }
+            sDebounceRelease = anyMappedHeld;
+        }
+
+        if (overlayOpen || sDebounceRelease) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
             /* The one-frame edge cache must be cleared on this path too: the
              * event loop keeps stamping edges for keys/pad buttons the overlays
