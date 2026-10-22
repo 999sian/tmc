@@ -111,6 +111,12 @@ bool Port_Config_GetSkipLauncher(void);
 void Port_Config_SetSkipLauncher(bool on);
 void Port_Config_ToggleConsoleParity(void);
 
+/* When ON, opening the F8 menu freezes the game world (reuses Practice
+ * Mode's pause loop). Off by default. Persisted as "pause_on_menu_open"
+ * (issue #225). */
+bool Port_Config_GetPauseOnMenuOpen(void);
+void Port_Config_SetPauseOnMenuOpen(bool on);
+
 /* Aspect-ratio mode for the on-screen viewport. The game frame is always
  * rendered at its own aspect (3:2 native, wider in true widescreen) — this
  * knob picks the *stage* it sits inside. The area between frame and stage

@@ -11,6 +11,12 @@ bool Port_Audio_Init(void);
 void Port_Audio_Shutdown(void);
 void Port_Audio_Reset(void);
 
+/* Stops/resumes the SDL audio device itself, so music/SFX freeze in lockstep
+ * with a frozen game world instead of drifting out of sync behind it. Used
+ * by VBlankIntrWait's pause loop. No-op if the device never opened. */
+void Port_Audio_PauseDevice(void);
+void Port_Audio_ResumeDevice(void);
+
 /* GBA-accurate audio toggle (F8 → Audio). This is the single front door:
  * it records the flag the audio thread reads to bypass the output-DSP
  * post-process chain, AND forwards to the synth backend (NEAREST resampling,

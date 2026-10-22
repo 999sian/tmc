@@ -749,19 +749,37 @@ void VBlankIntrWait(void) {
      * events only (no Port_UpdateInput, so the game state can't advance),
      * until unpaused or a single frame-advance step is requested. The F8
      * menu and the practice overlay stay live while the game is frozen;
-     * Port_Practice_ConsumeStep() lets exactly one frame through per step. */
-    while (Port_Practice_IsPaused() && !Port_Practice_ConsumeStep()) {
-        /* Port_PresentOnce (not a bare PresentFrame) so the HBlank-DMA line
-         * clock is rewound between re-rasterizations of the same frame —
-         * without it, per-line effects (affine wobble) rendered wrong from
-         * the second paused present onward. */
-        Port_PresentOnce(true);
-        Port_PumpEvents();
-        if (Port_ImGui_QuitConfirmed())
-            gQuitRequested = true;
-        if (gQuitRequested)
-            exit(0);
-        SDL_Delay(4); /* ~4ms: responsive UI without a busy spin */
+     * Port_Practice_ConsumeStep() lets exactly one frame through per step.
+     *
+     * "pause_on_menu_open" (issue #225) reuses this loop: enabled + F8 open
+     * holds here too, with no step-through (practice-mode-only concept). */
+    {
+        /* The audio callback runs on its own thread and keeps consuming the
+         * stream regardless of engine state, so without this music/SFX keep
+         * elapsing behind a frozen game — audible as a desync once resumed.
+         * Paused/resumed once per freeze, not per loop iteration. */
+        bool pausedAudio = false;
+        while ((Port_Practice_IsPaused() && !Port_Practice_ConsumeStep()) ||
+               (Port_Config_GetPauseOnMenuOpen() && Port_DebugMenu_IsOpen())) {
+            if (!pausedAudio) {
+                Port_Audio_PauseDevice();
+                pausedAudio = true;
+            }
+            /* Port_PresentOnce (not a bare PresentFrame) so the HBlank-DMA line
+             * clock is rewound between re-rasterizations of the same frame —
+             * without it, per-line effects (affine wobble) rendered wrong from
+             * the second paused present onward. */
+            Port_PresentOnce(true);
+            Port_PumpEvents();
+            if (Port_ImGui_QuitConfirmed())
+                gQuitRequested = true;
+            if (gQuitRequested)
+                exit(0);
+            SDL_Delay(4); /* ~4ms: responsive UI without a busy spin */
+        }
+        if (pausedAudio) {
+            Port_Audio_ResumeDevice();
+        }
     }
 
     /* Toggle VSync based on whether we're trying to run faster than the

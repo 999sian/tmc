@@ -341,6 +341,18 @@ void Port_Audio_Shutdown(void) {
     Port_M4A_Backend_Shutdown();
 }
 
+void Port_Audio_PauseDevice(void) {
+    if (sAudioStream != NULL) {
+        SDL_PauseAudioStreamDevice(sAudioStream);
+    }
+}
+
+void Port_Audio_ResumeDevice(void) {
+    if (sAudioStream != NULL) {
+        SDL_ResumeAudioStreamDevice(sAudioStream);
+    }
+}
+
 void Port_Audio_Reset(void) {
     Port_M4A_Backend_Reset();
 
