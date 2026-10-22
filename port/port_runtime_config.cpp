@@ -172,6 +172,7 @@ bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
  * and this config both work by setting TMC_AUTOPLAY=1 in-process (port_main.c) —
  * see docs/env-vars.md. */
 bool sSkipLauncher = false;
+bool sPauseOnMenuOpen = false; /* freeze the game world while F8 is open */
 float sAnalogDeadzone = 0.30f;     /* 360° stick deadzone magnitude [0..0.95] */
 std::string sShaderPreset;         /* path to active .glslp, empty = none */
 unsigned sRebornFeatures = 0;      /* bitmask of enabled Reborn features */
@@ -308,6 +309,7 @@ const BoolCfg kBoolCfg[] = {
     { "fullscreen", &sFullscreen, false },
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
     { "skip_launcher", &sSkipLauncher, false },
+    { "pause_on_menu_open", &sPauseOnMenuOpen, false },
     { "rando_enabled", &sRandoEnabled, false },
     { "rando_glitchless", &sRandoGlitchless, true },
     { "rando_obscure", &sRandoObscure, false },
@@ -1991,6 +1993,14 @@ extern "C" bool Port_Config_GetSkipLauncher(void) {
 extern "C" void Port_Config_SetSkipLauncher(bool on) {
     sSkipLauncher = on;
     sConfigJson["skip_launcher"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetPauseOnMenuOpen(void) {
+    return sPauseOnMenuOpen;
+}
+extern "C" void Port_Config_SetPauseOnMenuOpen(bool on) {
+    sPauseOnMenuOpen = on;
+    sConfigJson["pause_on_menu_open"] = on;
     SaveConfig();
 }
 extern "C" float Port_Config_GetAnalogDeadzone(void) {

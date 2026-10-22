@@ -723,6 +723,10 @@ static void DrawRibbon(void) {
         if (ImGui::Checkbox("Skip launcher on future runs", &skipLauncher)) {
             Port_Config_SetSkipLauncher(skipLauncher);
         }
+        bool pauseOnMenuOpen = Port_Config_GetPauseOnMenuOpen();
+        if (ImGui::Checkbox("Pause game while this menu is open", &pauseOnMenuOpen)) {
+            Port_Config_SetPauseOnMenuOpen(pauseOnMenuOpen);
+        }
         bool useRibbon = sRibbonEnabled;
         if (ImGui::Checkbox("Ribbon mode (uncheck for classic menu)", &useRibbon)) {
             sRibbonEnabled = useRibbon;
@@ -1467,6 +1471,10 @@ extern "C" bool Port_ImGui_Render(void) {
                 bool skipLauncher = Port_Config_GetSkipLauncher();
                 if (ImGui::Checkbox("Skip launcher", &skipLauncher)) {
                     Port_Config_SetSkipLauncher(skipLauncher); /* persist (#146) */
+                }
+                bool pauseOnMenuOpen = Port_Config_GetPauseOnMenuOpen();
+                if (ImGui::Checkbox("Pause on menu open", &pauseOnMenuOpen)) {
+                    Port_Config_SetPauseOnMenuOpen(pauseOnMenuOpen); /* persist (#225) */
                 }
                 if (ImGui::SmallButton("Switch to ribbon mode")) {
                     sRibbonEnabled = true;
