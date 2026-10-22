@@ -630,7 +630,7 @@ static void DrawRibbon(void) {
          * open, so without this button users on mouse-only or who
          * forgot the F8/Select+Start hotkey have no way out. Render
          * it BEFORE the tab bar so it sits at the very top edge. */
-        const float closeW = 80.0f;
+        const float closeW = 105.0f;
         ImGui::SameLine(ImGui::GetWindowWidth() - closeW - 12.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.30f, 0.30f, 1.0f));
