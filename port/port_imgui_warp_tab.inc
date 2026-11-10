@@ -68,6 +68,11 @@ static void DrawRibbonWarpTab(void) {
         if (ImGui::Checkbox("Noclip (walk through walls)", &noclip)) {
             Port_DebugAction_SetNoclip(noclip ? 1 : 0);
         }
+        ImGui::SameLine();
+        bool noDamage = Port_DebugQuery_NoDamage() != 0;
+        if (ImGui::Checkbox("No damage", &noDamage)) {
+            Port_DebugAction_SetNoDamage(noDamage ? 1 : 0);
+        }
         if (Port_Config_GetConsoleParity()) {
             ImGui::SameLine();
             ImGui::TextDisabled("(disabled in Console-Parity)");

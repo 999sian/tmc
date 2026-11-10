@@ -309,6 +309,13 @@ s32 ModHealth(s32 delta) {
             delta *= Rando_Runtime_DamageMultiplier();
         }
     }
+    /* No-damage debug toggle: losses are dropped, healing still applies. */
+    {
+        extern int Port_Debug_NoDamageEnabled(void);
+        if (delta < 0 && Port_Debug_NoDamageEnabled()) {
+            delta = 0;
+        }
+    }
 #endif
 
     newHealth = stats->health + delta;

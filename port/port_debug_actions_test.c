@@ -222,6 +222,10 @@ int main(void) {
     Port_DebugAction_SetNoclip(0);
     CHECK(Port_DebugQuery_Noclip() == 0, "noclip query reflects off");
     CHECK(Port_Debug_NoclipEnabled() == 0, "noclip predicate off when toggle off");
+    Port_DebugAction_SetNoDamage(1);
+    CHECK(Port_Debug_NoDamageEnabled() == 1, "no-damage enabled when on + parity off");
+    Port_DebugAction_SetNoDamage(0);
+    CHECK(Port_DebugQuery_NoDamage() == 0, "no-damage query reflects off");
 
     /* TASK_GAME precedes camera initialization. Preserve-position warp
      * coordinates must not reach the engine's camera dereference yet. */
