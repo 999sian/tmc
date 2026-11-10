@@ -250,6 +250,12 @@ void sub_080A5128(void) {
             p[0].x = 0x40;
             p[0].y = 0x10 - (gPauseMenuOptions.unk16 << 1);
             t = (gPauseMenuOptions.unk16 / 3);
+#if defined(PC_PORT) && defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+            /* The page slide nudges L and R outward, past the screen edge.
+             * Widescreen frames the menu with side art, where that clip
+             * shows; nudge them inward instead so they stay whole. */
+            t = -t;
+#endif
             p[1].x = 0x10 - t;
             p[1].y = 0x48;
             p[2].x = 0xe0 + t;
