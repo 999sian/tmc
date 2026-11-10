@@ -32,6 +32,7 @@
 
 #include "port_entity_ctx.h"
 #include "port_gba_mem.h"
+#include "port_hdma.h"
 #include "port_rom.h"
 #include "port_runtime_config.h"
 #include "port_widescreen.h"
@@ -983,6 +984,10 @@ void UpdateScrollVram(void) {
     if (gMapTop.bgSettings != NULL) {
         func(gMapDataTopSpecial, &gBG2Buffer[0x20]);
     }
+
+    /* Wide rolling transition: replace the 240px rolling stream with a fill
+     * composed from both rooms (no-op otherwise). */
+    Port_Widescreen_RollComposeVram();
 }
 
 #if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
@@ -1007,6 +1012,7 @@ void UpdateScrollVram(void) {
 static u16 sWsShadowBG1[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 static u16 sWsShadowBG2[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 static u16 sWsShadowOverlay[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
+static u16 sWsShadowSource[MODE1_GBA_BG_COUNT][MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 
 /* ---- Runtime widescreen gate --------------------------------------------
  * `--widescreen_width=N` only reserves a wider framebuffer. True widescreen
@@ -1028,6 +1034,31 @@ static u16 sWsShadowOverlay[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
  * late-streaming map data can't flip the mode back and forth mid-room. */
 static u32 sWsContentKey = 0xffffffffu;
 static s32 sWsContentPx = 0;
+
+/* Frame width the presenter uses, decided at vblank together with the
+ * tilemap, OAM and shadows that frame shows (see Port_Widescreen_UpdateShadows).
+ * Evaluating it live at present time instead paired the next tick's width
+ * with the previous tick's content for one frame whenever the mode flipped. */
+static int sWsLatchedFrameWidth = 240;
+
+/* ---- Rolling (edge-scroll) transitions ----------------------------------
+ * The engine's rolling stream (sub_0807D280) carries only 240px, and the room
+ * maps switch to the destination on the transition's first frame. A wide
+ * transition keeps the view wide by snapshotting the outgoing room's maps and
+ * bounds, then composing every visible tile from whichever room owns that
+ * world position: the native VRAM band (Port_Widescreen_RollComposeVram) and
+ * the reveal shadows alike. The camera is driven from its start position to
+ * where the destination's steady camera will rest, so completion does not jump. */
+static u16 sWsRollBottom[0x4000];
+static u16 sWsRollTop[0x4000];
+static struct {
+    int active; /* sub_0807BD14 until sub_0807FEC8 */
+    int wide;   /* composite in use; view frozen at `view` */
+    int view;
+    s32 ox, oy, w, h; /* outgoing room bounds, world px */
+    s32 sx, sy;       /* camera when the scroll starts */
+    s32 endCx, endY;  /* view centre x and top when the roll ends */
+} sWsRoll;
 
 /* Key identifying the room the content cache belongs to. Checked by
  * FallbackNative so a stale cache (previous room) is never consulted —
@@ -1116,19 +1147,14 @@ static s32 Port_WidescreenEffectiveTarget(void) {
     return target;
 }
 
-int Port_Widescreen_FallbackNative(void) {
+/* Room-steady decision, independent of any running transition effect. */
+static int Port_WidescreenSteadyFallback(void) {
     s32 eff;
     if (!Port_Config_WidescreenEnabled()) {
         return 1;
     }
     if (Port_Widescreen_TargetViewWidth() <= 240) {
         return 1; /* window is 3:2/4:3 — native view already fills it */
-    }
-    /* Rolling room transitions stream a 240px VRAM buffer while mapSpecial
-     * already contains the destination room. The iris uses an 8-bit WIN1.
-     * Keep these effects native until their camera/tilemap refresh completes. */
-    if (gRoomControls.scrollAction == 2 || gRoomControls.scrollAction == 4 || gRoomControls.scrollAction == 5) {
-        return 1;
     }
     eff = Port_WidescreenEffectiveTarget();
     if (eff <= 240) {
@@ -1143,6 +1169,20 @@ int Port_Widescreen_FallbackNative(void) {
         return 1;
     }
     return 0;
+}
+
+int Port_Widescreen_FallbackNative(void) {
+    /* A rolling transition keeps the decision made when it started: wide
+     * ones compose both rooms, native ones (started narrow) stay native. */
+    if (gRoomControls.scrollAction == 2) {
+        return (sWsRoll.active && sWsRoll.wide) ? 0 : 1;
+    }
+    /* The digging-cave iris (5) packs its window into an 8-bit WIN1, and
+     * Scroll4 streams a 240px buffer; both stay native until they complete. */
+    if (gRoomControls.scrollAction == 4 || gRoomControls.scrollAction == 5) {
+        return 1;
+    }
+    return Port_WidescreenSteadyFallback();
 }
 
 int Port_Widescreen_IsActive(void) {
@@ -1161,8 +1201,281 @@ int Port_Widescreen_EffectiveViewWidth(void) {
     if (!Port_Widescreen_IsActive()) {
         return 240;
     }
+    if (gRoomControls.scrollAction == 2 && sWsRoll.wide) {
+        return sWsRoll.view;
+    }
     eff = Port_WidescreenEffectiveTarget();
     return eff > 240 ? (int)eff : 240;
+}
+
+/* View width the current room settles at once no transition effect runs. */
+static int Port_WidescreenSteadyViewWidth(void) {
+    s32 eff;
+    if (gMain.task != TASK_GAME || Port_WidescreenSteadyFallback()) {
+        return 240;
+    }
+    eff = Port_WidescreenEffectiveTarget();
+    return eff > 240 ? (int)eff : 240;
+}
+
+int Port_Widescreen_LatchedFrameWidth(void) {
+    return sWsLatchedFrameWidth;
+}
+
+static int Port_WidescreenRollComposite(void) {
+    return gRoomControls.scrollAction == 2 && sWsRoll.active && sWsRoll.wide;
+}
+
+/* Tile entry at (row, col) in 8px tiles relative to the current room origin.
+ * Outside the current room the outgoing room's snapshot answers when `roll`
+ * is given; anything else is void (entry 0, backdrop), like the GBA. */
+static u16 Port_WidescreenRollFetch(const u16* cur, const u16* roll, s32 row, s32 col) {
+    enum { kStride = 128 };
+    s32 w = (s32)gRoomControls.width / 8;
+    s32 h = (s32)gRoomControls.height / 8;
+    if (w > kStride)
+        w = kStride;
+    if (h > kStride)
+        h = kStride;
+    if (row >= 0 && row < h && col >= 0 && col < w) {
+        return cur[(size_t)row * kStride + col];
+    }
+    if (roll == NULL) {
+        return 0;
+    }
+    row += ((s32)gRoomControls.origin_y - sWsRoll.oy) / 8;
+    col += ((s32)gRoomControls.origin_x - sWsRoll.ox) / 8;
+    w = sWsRoll.w / 8;
+    h = sWsRoll.h / 8;
+    if (w > kStride)
+        w = kStride;
+    if (h > kStride)
+        h = kStride;
+    if (row >= 0 && row < h && col >= 0 && col < w) {
+        return roll[(size_t)row * kStride + col];
+    }
+    return 0;
+}
+
+/* Fill a BG buffer exactly as ram_sub_080B197C_c lays it out for the current
+ * camera (row 0 = the padding row above, col 0 = the camera's 16px column),
+ * so UpdateScreenShake's offsets line up, but source each cell by world
+ * position. Signed math: the camera sits outside the current room mid-scroll. */
+static void Port_WidescreenRollComposeBuffer(const u16* cur, const u16* roll, u16* buffer) {
+    s32 xdiff = (s32)gRoomControls.scroll_x - (s32)gRoomControls.origin_x;
+    s32 ydiff = (s32)gRoomControls.scroll_y - (s32)gRoomControls.origin_y;
+    s32 col0 = (xdiff >> 4) * 2;
+    s32 row0 = (ydiff >> 4) * 2 - 1;
+    for (s32 r = 0; r < 23; r++) {
+        for (s32 c = 0; c < 32; c++) {
+            buffer[r * 32 + c] = Port_WidescreenRollFetch(cur, roll, row0 + r, col0 + c);
+        }
+    }
+}
+
+void Port_Widescreen_RollComposeVram(void) {
+    if (!Port_WidescreenRollComposite()) {
+        return;
+    }
+    if (gMapBottom.bgSettings != NULL) {
+        Port_WidescreenRollComposeBuffer(gMapDataBottomSpecial, sWsRollBottom, gBG1Buffer);
+    }
+    if (gMapTop.bgSettings != NULL) {
+        Port_WidescreenRollComposeBuffer(gMapDataTopSpecial, sWsRollTop, gBG2Buffer);
+    }
+}
+
+/* sub_0807BD14, before the room bounds and maps are replaced. */
+void Port_Widescreen_RollBegin(void) {
+    int view = Port_Widescreen_EffectiveViewWidth();
+    sWsRoll.active = 1;
+    sWsRoll.view = view;
+    /* scroll_flags bit 0 marks rooms whose special maps use another layout. */
+    sWsRoll.wide = view > 240 && !(gRoomControls.scroll_flags & 1);
+    if (!sWsRoll.wide) {
+        return;
+    }
+    sWsRoll.ox = gRoomControls.origin_x;
+    sWsRoll.oy = gRoomControls.origin_y;
+    sWsRoll.w = gRoomControls.width;
+    sWsRoll.h = gRoomControls.height;
+    memcpy(sWsRollBottom, gMapDataBottomSpecial, sizeof(sWsRollBottom));
+    memcpy(sWsRollTop, gMapDataTopSpecial, sizeof(sWsRollTop));
+}
+
+/* Keeps the view's cross axis inside every room showing along the scroll
+ * axis (`all`: both rooms, shown yet or not). Rooms rarely line up on the
+ * cross axis, and the GBA's 240px view never shows the world outside them, so
+ * a wide roll that pans sideways (or runs wider than a room) drew void: black
+ * blocks beside the narrower room. */
+static void Port_WidescreenRollClamp(RoomControls* rc, int all) {
+    const int vertical = !(rc->scroll_direction & 1);
+    const s32 view = vertical ? sWsRoll.view : 160;
+    const s32 span = vertical ? 160 : sWsRoll.view;
+    const s32 pos = vertical ? rc->scroll_y : rc->scroll_x;
+    const s32 rooms[2][4] = {
+        { sWsRoll.ox, sWsRoll.oy, sWsRoll.w, sWsRoll.h },
+        { rc->origin_x, rc->origin_y, (s32)rc->width, (s32)rc->height },
+    };
+    s32 lo = -0x8000, hi = 0x7fff;
+    int i;
+    for (i = 0; i < 2; i++) {
+        const s32 along = vertical ? rooms[i][1] : rooms[i][0];
+        const s32 alongLen = vertical ? rooms[i][3] : rooms[i][2];
+        const s32 cross = vertical ? rooms[i][0] : rooms[i][1];
+        const s32 crossLen = vertical ? rooms[i][2] : rooms[i][3];
+        if (!all && (along >= pos + span || along + alongLen <= pos)) {
+            continue;
+        }
+        if (cross > lo)
+            lo = cross;
+        if (cross + crossLen - view < hi)
+            hi = cross + crossLen - view;
+    }
+    if (lo > hi) {
+        return; /* no placement avoids void; leave the glide alone */
+    }
+    if (vertical) {
+        rc->scroll_x = (s16)(rc->scroll_x < lo ? lo : rc->scroll_x > hi ? hi : rc->scroll_x);
+    } else {
+        rc->scroll_y = (s16)(rc->scroll_y < lo ? lo : rc->scroll_y > hi ? hi : rc->scroll_y);
+    }
+}
+
+/* Scroll2Sub1: the camera has not moved since sub_0807BD14's reframe, and
+ * the room bounds are now the destination's. A destination narrower than the
+ * frozen view would show void beside it for the whole roll, so the roll runs
+ * at the destination's width instead. The start is then placed inside both
+ * rooms where it can be, so the per-step clamp never jerks it sideways once
+ * the destination scrolls in. */
+void Port_Widescreen_RollStart(void) {
+    RoomControls* rc = &gRoomControls;
+    if (Port_WidescreenRollComposite()) {
+        s32 steadyW = Port_WidescreenSteadyViewWidth();
+        if (steadyW < 240)
+            steadyW = 240;
+        if (steadyW < sWsRoll.view) {
+            rc->scroll_x = (s16)(rc->scroll_x + (sWsRoll.view - steadyW) / 2);
+            sWsRoll.view = steadyW;
+        }
+        Port_WidescreenRollClamp(rc, 1);
+    }
+    sWsRoll.sx = rc->scroll_x;
+    sWsRoll.sy = rc->scroll_y;
+}
+
+/* Scroll2Sub2, after the engine's per-frame move. Interpolates the camera
+ * from its start to where sub_0807FEC8's completion snap will put it: the
+ * destination's steady rest for the target's final position, shifted so the
+ * view's centre (not its left edge) matches when the steady width differs. */
+void Port_Widescreen_RollStep(void) {
+    RoomControls* rc = &gRoomControls;
+    Entity* target = rc->camera_target;
+    s32 frames = (rc->scroll_direction & 1) ? 0x3c : 0x28;
+    s32 k = rc->unk_18;
+    s32 fx, fy, steadyW, lo, hi, ex, ey;
+    if (!Port_WidescreenRollComposite() || target == NULL || k <= 0 || k >= frames) {
+        return;
+    }
+    fx = target->x.WORD;
+    fy = target->y.WORD;
+    if (target == &gPlayerEntity.base) {
+        s32 left = frames - k; /* Scroll2Sub2's remaining player nudges */
+        switch (rc->scroll_direction) {
+            case 0:
+                fy -= left * Q_16_16(0.375);
+                break;
+            case 1:
+                fx += left * Q_16_16(0.25);
+                break;
+            case 2:
+                fy += left * Q_16_16(0.375);
+                break;
+            default:
+                fx -= left * Q_16_16(0.25);
+                break;
+        }
+    }
+    fx >>= 16;
+    fy >>= 16;
+    steadyW = Port_WidescreenSteadyViewWidth();
+    lo = rc->origin_x;
+    hi = lo + (s32)rc->width - steadyW;
+    ex = fx - steadyW / 2;
+    if (ex > hi)
+        ex = hi;
+    if (ex < lo)
+        ex = lo;
+    ex -= (sWsRoll.view - steadyW) / 2;
+    /* sub_080809D4's vertical rest, verbatim. */
+    if (fy <= rc->origin_y + 80) {
+        ey = rc->origin_y;
+    } else {
+        s32 bottom = rc->origin_y + (s32)rc->height - 80;
+        ey = (fy < bottom ? fy : bottom) - 80;
+    }
+    rc->scroll_x = (s16)(sWsRoll.sx + (ex - sWsRoll.sx) * k / frames);
+    rc->scroll_y = (s16)(sWsRoll.sy + (ey - sWsRoll.sy) * k / frames);
+    Port_WidescreenRollClamp(rc, 0);
+}
+
+/* sub_0807FEC8. Returns whether the transition ran wide, so completion snaps
+ * the camera even when the destination settles native. */
+int Port_Widescreen_RollEnd(void) {
+    int wasWide = sWsRoll.active && sWsRoll.wide;
+    sWsRoll.endCx = gRoomControls.scroll_x + sWsRoll.view / 2;
+    sWsRoll.endY = gRoomControls.scroll_y;
+    sWsRoll.active = 0;
+    sWsRoll.wide = 0;
+    return wasWide;
+}
+
+/* After sub_0807FEC8's rest snap: put the camera back where the roll left it
+ * (same view centre, clamped to the room), so a roll that the clamp kept off
+ * its rest hands over to Scroll1's follow pan instead of jumping. Unclamped
+ * rolls already end at rest, so this changes nothing for them. */
+void Port_Widescreen_RollHandoff(void) {
+    RoomControls* rc = &gRoomControls;
+    const s32 view = Port_Widescreen_EffectiveViewWidth();
+    s32 x = sWsRoll.endCx - view / 2;
+    s32 y = sWsRoll.endY;
+    s32 hiX = rc->origin_x + (s32)rc->width - view;
+    s32 hiY = rc->origin_y + (s32)rc->height - 160;
+    if (x > hiX)
+        x = hiX;
+    if (x < rc->origin_x)
+        x = rc->origin_x;
+    if (y > hiY)
+        y = hiY;
+    if (y < rc->origin_y)
+        y = rc->origin_y;
+    if (x != rc->scroll_x || y != rc->scroll_y) {
+        rc->scroll_x = (s16)x;
+        rc->scroll_y = (s16)y;
+        gUpdateVisibleTiles = 1;
+    }
+}
+
+/* Refresh the per-room content width. Keyed on area|room|origin; ratcheted
+ * so late-streaming map data can only widen, never flip wide->native
+ * mid-room. Called at vblank and right after LoadRoomGfx, so the camera
+ * placed on room entry already sees the new room's content. */
+void Port_Widescreen_RescanRoomContent(void) {
+    u32 key = Port_WidescreenRoomKey();
+    s32 px;
+    if (key != sWsContentKey) {
+        sWsContentKey = key;
+        sWsContentPx = 0;
+    }
+    px = Port_WidescreenScanContentPx();
+    if (px > sWsContentPx) {
+        sWsContentPx = px;
+        if (getenv("TMC_WS_TRACE") != NULL) {
+            fprintf(stderr, "[ws] area=0x%02x room=0x%02x width=%d content_px=%d -> %s\n",
+                    (unsigned)gRoomControls.area, (unsigned)gRoomControls.room, (int)gRoomControls.width,
+                    (int)sWsContentPx, Port_WidescreenSteadyFallback() ? "native-240" : "wide");
+        }
+    }
 }
 
 /* Single source of truth for the camera's rest x (see port_widescreen.h).
@@ -1235,7 +1548,7 @@ int Port_TouchControls_RActionAvailable(void) {
     }
 }
 
-static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* shadow) {
+static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, const u16* rollMap, u16* shadow) {
     /* Populate the port-side shadow tilemap the PPU reads for the reveal
      * columns (display x >= MODE1_GBA_BG_CLIP_X). The engine's 32-tile VRAM
      * screenblock only spans ~256 px of world and wraps past that, so the
@@ -1272,35 +1585,21 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     s32 ws_base_world_col = (xdiff >> 3) + (MODE1_GBA_BG_CLIP_X / 8) - 1;
     virtuappu_mode1_ws_shadow_base_tile[bg_index] = (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0) - 1;
 
-    enum { kMapStride = 128, kMapRows = 128 };
-    /* Clamp to the ROOM rect, not just the 128-tile buffer: the buffers are
-     * reused across rooms without clearing, so cells past the current room's
-     * extent hold the previous room's tiles — sampling them leaked stale
-     * graphics into the reveal near room edges. Outside the room = entry 0
-     * (transparent; the backdrop remains visible), same as GBA's void. */
-    s32 room_tiles_w = (s32)gRoomControls.width / 8;
-    s32 room_tiles_h = (s32)gRoomControls.height / 8;
-    if (room_tiles_w > kMapStride)
-        room_tiles_w = kMapStride;
-    if (room_tiles_h > kMapRows)
-        room_tiles_h = kMapRows;
+    /* Sample within the ROOM rect, not just the 128-tile buffer: the buffers
+     * are reused across rooms without clearing, so cells past the current
+     * room's extent hold the previous room's tiles — sampling them leaked
+     * stale graphics into the reveal near room edges. Outside the room =
+     * entry 0 (transparent; the backdrop remains visible), same as GBA's
+     * void — unless a wide rolling transition supplies the outgoing room. */
     for (int sr = 0; sr < MODE1_WS_SHADOW_ROWS; sr++) {
         u16* row_dst = shadow + (size_t)sr * MODE1_WS_SHADOW_COLS;
         s32 world_row = 2 * row16 - 1 + sr;
         /* Match the native fill's duplicated first row at the room top;
          * negative vertical shake can expose this leading padding row. */
-        if (ydiff >= 0 && ydiff < 8 && sr == 0)
+        if (rollMap == NULL && ydiff >= 0 && ydiff < 8 && sr == 0)
             world_row = 0;
-        if (world_row < 0 || world_row >= room_tiles_h) {
-            for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++)
-                row_dst[C] = 0;
-            continue;
-        }
-        u16* row_src = mapSpecial + (size_t)world_row * kMapStride;
         for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++) {
-            s32 world_col = ws_base_world_col + C;
-            u16 entry = (world_col >= 0 && world_col < room_tiles_w) ? row_src[world_col] : (u16)0;
-            row_dst[C] = entry;
+            row_dst[C] = Port_WidescreenRollFetch(mapSpecial, rollMap, world_row, ws_base_world_col + C);
         }
     }
     virtuappu_mode1_ws_shadow[bg_index] = shadow;
@@ -1318,6 +1617,46 @@ static void Port_WidescreenShadow_PopulateOverlay(const u16* screen, u16* shadow
     }
     virtuappu_mode1_ws_shadow_base_tile[3] = 0;
     virtuappu_mode1_ws_shadow[3] = shadow;
+}
+
+#define WS_BG_SOURCE_SLOTS 3
+#define WS_BG_SOURCE_STRIDE 128
+static struct {
+    const void* dest;
+    const u16* src;
+    const u16* end;
+} sWsBgSource[WS_BG_SOURCE_SLOTS];
+
+void Port_Widescreen_BgWindowSource(const void* dest, const void* src, const void* end) {
+    int slot = 0;
+    for (int i = 0; i < WS_BG_SOURCE_SLOTS; ++i) {
+        if (sWsBgSource[i].dest == dest || sWsBgSource[i].dest == NULL) {
+            slot = i;
+            break;
+        }
+    }
+    sWsBgSource[slot].dest = dest;
+    sWsBgSource[slot].src = (const u16*)src;
+    sWsBgSource[slot].end = (const u16*)end;
+}
+
+/* The copied window covers image columns 0..31 at BGHOFS 0..15, so screen
+ * x >= 240 reads tile columns 30 onward: continue the image from there. */
+static int Port_WidescreenShadow_PopulateSource(int bg, const void* subTileMap) {
+    for (int i = 0; i < WS_BG_SOURCE_SLOTS; ++i) {
+        if (sWsBgSource[i].dest == NULL || sWsBgSource[i].dest != subTileMap)
+            continue;
+        u16* shadow = sWsShadowSource[bg];
+        for (int row = 0; row < MODE1_WS_SHADOW_ROWS; ++row) {
+            const u16* line = sWsBgSource[i].src + row * WS_BG_SOURCE_STRIDE + (MODE1_GBA_BG_CLIP_X / 8);
+            for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col)
+                shadow[row * MODE1_WS_SHADOW_COLS + col] = (line + col < sWsBgSource[i].end) ? line[col] : 0;
+        }
+        virtuappu_mode1_ws_shadow_base_tile[bg] = MODE1_GBA_BG_CLIP_X / 8;
+        virtuappu_mode1_ws_shadow[bg] = shadow;
+        return 1;
+    }
+    return 0;
 }
 
 /* Which PPU BG index renders a given map: the PPU selects a BG's tilemap by
@@ -1338,32 +1677,35 @@ static int Port_WidescreenPpuBgForControl(u32 control) {
     return -1;
 }
 
+/* Room and area reloads (doors, area handoffs, scripted warps) blank the map
+ * BGs for a frame or more while the room width is still 0 or a fade runs.
+ * Only the backdrop, BG0 and sprites show, so the previous frame width
+ * stays: dropping to 240 there flashed pillarbox bars around the fade. */
+static int Port_WidescreenHoldBlankFrame(void) {
+    const u32 mapBgs = DISPCNT_BG1_ON | DISPCNT_BG2_ON | DISPCNT_BG3_ON;
+    if (gMain.task != TASK_GAME || !Port_Config_WidescreenEnabled() || sWsLatchedFrameWidth <= 240)
+        return 0;
+    if ((gScreen.lcd.displayControl & mapBgs) != 0)
+        return 0;
+    return gRoomControls.width == 0 || gFadeControl.active || (gScreen.lcd.displayControl & DISPCNT_FORCED_BLANK);
+}
+
 /* Called per-VBlank from src/interrupts.c::UpdateDisplayControls. */
 void Port_Widescreen_UpdateShadows(void) {
+    port_ws_window_latch(gScreen.controls.window0HorizontalDimensions, gScreen.controls.window1HorizontalDimensions);
+    if (Port_WidescreenHoldBlankFrame())
+        return;
     for (int i = 0; i < MODE1_GBA_BG_COUNT; i++)
         virtuappu_mode1_ws_shadow[i] = NULL;
     virtuappu_mode1_ws_hud_right_anchor = 0;
     virtuappu_mode1_ws_msg_shift = 0;
+    sWsLatchedFrameWidth = 240;
 
     /* Refresh the per-room content-width signal BEFORE the IsActive gate
-     * (FallbackNative consumes it). Keyed on area|room|origin; ratcheted so
-     * late-streaming map data can only widen, never flip wide->native
-     * mid-room. ~16K u16 reads worst case, once per vblank — negligible. */
+     * (FallbackNative consumes it). ~16K u16 reads worst case, once per
+     * vblank — negligible. */
     if (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled()) {
-        u32 key = Port_WidescreenRoomKey();
-        if (key != sWsContentKey) {
-            sWsContentKey = key;
-            sWsContentPx = 0;
-        }
-        s32 px = Port_WidescreenScanContentPx();
-        if (px > sWsContentPx) {
-            sWsContentPx = px;
-            if (getenv("TMC_WS_TRACE") != NULL) {
-                fprintf(stderr, "[ws] area=0x%02x room=0x%02x width=%d content_px=%d -> %s\n",
-                        (unsigned)gRoomControls.area, (unsigned)gRoomControls.room, (int)gRoomControls.width,
-                        (int)sWsContentPx, Port_Widescreen_FallbackNative() ? "native-240" : "wide");
-            }
-        }
+        Port_Widescreen_RescanRoomContent();
     }
 
     if (!Port_Widescreen_IsActive()) {
@@ -1409,23 +1751,43 @@ void Port_Widescreen_UpdateShadows(void) {
         }
     }
 
+    const int roll = Port_WidescreenRollComposite();
     if (gMapBottom.bgSettings != NULL) {
         int bg = Port_WidescreenPpuBgForControl(gMapBottom.bgSettings->control);
         if (bg >= 0)
-            Port_WidescreenShadow_Populate(bg, gMapDataBottomSpecial, sWsShadowBG1);
+            Port_WidescreenShadow_Populate(bg, gMapDataBottomSpecial, roll ? sWsRollBottom : NULL, sWsShadowBG1);
     }
     if (gMapTop.bgSettings != NULL) {
         int bg = Port_WidescreenPpuBgForControl(gMapTop.bgSettings->control);
         if (bg >= 0)
-            Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, sWsShadowBG2);
+            Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, roll ? sWsRollTop : NULL, sWsShadowBG2);
     }
-    /* Extend known repeating overlays only; other BG3 canvases stay native.
-     * CloudOverlayManager uses priority 1; Woods and steam use priority 0. */
-    if (((gRoomControls.area == AREA_MINISH_WOODS && gScreen.bg3.control == 0x1e04) ||
-         (gRoomControls.area == AREA_HYRULE_FIELD && gScreen.bg3.control == 0x1e05) ||
-         (gRoomControls.area == AREA_CAVE_OF_FLAMES && gScreen.bg3.control == 0x1e04)) &&
-        (gScreen.lcd.displayControl & DISPCNT_BG3_ON) && virtuappu_mode1_ws_shadow[3] == NULL) {
-        Port_WidescreenShadow_PopulateOverlay((const u16*)(gVram + 0xf000), sWsShadowOverlay);
+    /* Parallax backgrounds built from a wider image continue that image. */
+    if (Port_Widescreen_ShadowsLive()) {
+        const u32 controls[MODE1_GBA_BG_COUNT] = { 0, gScreen.bg1.control, gScreen.bg2.control, gScreen.bg3.control };
+        const void* maps[MODE1_GBA_BG_COUNT] = { NULL, gScreen.bg1.subTileMap, gScreen.bg2.subTileMap,
+                                                 gScreen.bg3.subTileMap };
+        for (int bg = 1; bg < MODE1_GBA_BG_COUNT; ++bg) {
+            if (virtuappu_mode1_ws_shadow[bg] == NULL && (gScreen.lcd.displayControl & (DISPCNT_BG0_ON << bg)) &&
+                (controls[bg] & 0xc000u) == 0 && maps[bg] != NULL)
+                Port_WidescreenShadow_PopulateSource(bg, maps[bg]);
+        }
+    }
+    /* BG3 canvases that are not a room map (sky, clouds, fog, steam, the
+     * darkness overlay) extend by copying their own 256x256 screenblock: the
+     * shadow is then exactly the hardware wrap, so any scroll, wave or blend
+     * matches the native columns. Only when a map shadow is live, so overlay
+     * screens without map BGs still present native. Taller or wider screen
+     * sizes are skipped: 512-wide BGs already render to the frame edge, and
+     * the shadow has no second vertical screenblock. */
+    if (Port_Widescreen_ShadowsLive() && virtuappu_mode1_ws_shadow[3] == NULL &&
+        (gScreen.lcd.displayControl & DISPCNT_BG3_ON) && (gScreen.bg3.control & 0xc000u) == 0) {
+        const u32 sb = ((u32)gScreen.bg3.control >> 8) & 0x1fu;
+        Port_WidescreenShadow_PopulateOverlay((const u16*)(gVram + sb * 0x800u), sWsShadowOverlay);
+    }
+    /* Overlay screens swap the map BGs out (no shadow) and present native. */
+    if (Port_Widescreen_ShadowsLive()) {
+        sWsLatchedFrameWidth = Port_Widescreen_EffectiveViewWidth();
     }
 }
 #else
@@ -1445,6 +1807,29 @@ int Port_Widescreen_HudRightAnchor(void) {
 }
 int Port_Widescreen_ShadowsLive(void) {
     return 0;
+}
+int Port_Widescreen_LatchedFrameWidth(void) {
+    return 240;
+}
+void Port_Widescreen_RollComposeVram(void) {
+}
+void Port_Widescreen_RollBegin(void) {
+}
+void Port_Widescreen_RollStart(void) {
+}
+void Port_Widescreen_RollStep(void) {
+}
+int Port_Widescreen_RollEnd(void) {
+    return 0;
+}
+void Port_Widescreen_RollHandoff(void) {
+}
+void Port_Widescreen_RescanRoomContent(void) {
+}
+void Port_Widescreen_BgWindowSource(const void* dest, const void* src, const void* end) {
+    (void)dest;
+    (void)src;
+    (void)end;
 }
 void Port_Widescreen_SetWindowPixels(int w, int h) {
     (void)w;

@@ -96,6 +96,33 @@ int Port_Widescreen_TargetViewWidth(void);
  * effective view width of 240. */
 int Port_Widescreen_CameraRestX(int target_x);
 
+/* Present width decided at vblank alongside the content it frames (240 when
+ * not wide). The presenter must use this, never a live recomputation. */
+int Port_Widescreen_LatchedFrameWidth(void);
+
+/* Wide rolling (edge-scroll) transitions: Begin in sub_0807BD14 before the
+ * room changes, Start in Scroll2Sub1, Step after Scroll2Sub2's move, End in
+ * sub_0807FEC8 (returns whether it ran wide). ComposeVram rebuilds the BG
+ * buffers from both rooms after UpdateScrollVram's rolling stream. */
+void Port_Widescreen_RollBegin(void);
+void Port_Widescreen_RollStart(void);
+void Port_Widescreen_RollStep(void);
+int Port_Widescreen_RollEnd(void);
+/* After the rest snap: resume from the roll's last view; Scroll1 pans on. */
+void Port_Widescreen_RollHandoff(void);
+void Port_Widescreen_RollComposeVram(void);
+
+/* Rescan the current room's painted width; LoadRoomGfx calls it so camera
+ * placement on room entry already knows whether the room runs wide. */
+void Port_Widescreen_RescanRoomContent(void);
+
+/* Parallax backgrounds (Minish Rafters, Minish paths, Big Goron) copy a
+ * 32x32 tile window out of a wider image with a 128-entry row stride into
+ * `dest`, the BG's subTileMap. Record where the window starts so the
+ * widescreen shadow continues the image past the copied 256 px. `end`
+ * bounds the source buffer. */
+void Port_Widescreen_BgWindowSource(const void* dest, const void* src, const void* end);
+
 #ifdef __cplusplus
 }
 #endif

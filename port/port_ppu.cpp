@@ -155,8 +155,11 @@ extern "C" int Port_PPU_VisibleFrameWidth(void) {
         SDL_GetWindowSizeInPixels(sWindow, &w, &h);
         Port_Widescreen_SetWindowPixels(w, h);
     }
-    if (gMain[2] == 2 /* TASK_GAME */ && Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) {
-        return Port_Widescreen_EffectiveViewWidth();
+    /* Width latched at the vblank that produced this frame's tilemap, OAM and
+     * shadows. A live check here ran one tick ahead of the content whenever
+     * the mode flipped, showing one frame cropped or offset. */
+    if (gMain[2] == 2 /* TASK_GAME */) {
+        return Port_Widescreen_LatchedFrameWidth();
     }
     return 240;
 }
@@ -1407,6 +1410,8 @@ extern "C" void Port_PPU_PresentFrame(void) {
     /* HBlank-DMA simulation: only enable the scanline callback while a
      * channel is active. Affine BG rendering treats BG2X/BG2Y differently
      * when HDMA has already supplied per-line reference points. */
+    /* Withdraw last frame's wide window edges; HDMA lines republish them. */
+    port_ws_window_frame_begin();
     virtuappu_mode1_pre_line_callback = port_hdma_has_active_channels() ? port_hdma_step_line : nullptr;
 
     /* Affine reference write strobes: a per-line HDMA write to BG2X/BG2Y

@@ -21,6 +21,11 @@ static int filledRoom;
 int Port_Widescreen_EffectiveViewWidth(void) {
     return wide && gRoomControls.scrollAction != 2 && gRoomControls.scrollAction != 4 ? 384 : 240;
 }
+void Port_Widescreen_RollBegin(void) {}
+void Port_Widescreen_RollStart(void) {}
+void Port_Widescreen_RollStep(void) {}
+int Port_Widescreen_RollEnd(void) { return 0; }
+void Port_Widescreen_RollComposeVram(void) {}
 int Port_Widescreen_CameraRestX(int x) {
     int width = Port_Widescreen_EffectiveViewWidth();
     int rest = x - width / 2;

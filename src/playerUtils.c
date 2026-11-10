@@ -3905,13 +3905,17 @@ bool32 sub_0807BD14(Entity* this, u32 scrollDirection) {
     if (room != 0xff) {
 #if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
         extern int Port_Widescreen_EffectiveViewWidth(void);
+        extern void Port_Widescreen_RollBegin(void);
         const int wasWide = Port_Widescreen_EffectiveViewWidth() > 240;
+        /* Snapshot the departing room while its bounds/maps are still live. */
+        Port_Widescreen_RollBegin();
 #endif
         gRoomControls.scrollAction = 2;
 #if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
-        /* Rolling VRAM transitions carry only 240 pixels. Reframe against
-         * the departing room before its bounds/map are replaced below.
-         * Scroll2Sub0 then fills the native outgoing tilemap. */
+        /* Reframe against the departing room before its bounds/map are
+         * replaced below, at the width the transition runs at (wide when the
+         * two-room composite is available, else native). Scroll2Sub0 then
+         * fills the outgoing tilemap. */
         if (wasWide) {
             sub_080809D4();
         }
@@ -4177,6 +4181,12 @@ void LoadRoomGfx(void) {
     if (clearBottomMap || roomControls->area == AREA_PALACE_OF_WINDS_BOSS) {
         roomControls->scroll_flags |= 1;
     }
+#ifdef PC_PORT
+    {
+        extern void Port_Widescreen_RescanRoomContent(void);
+        Port_Widescreen_RescanRoomContent();
+    }
+#endif
 
     switch (roomControls->area) {
         case AREA_MINISH_HOUSE_INTERIORS:

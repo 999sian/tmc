@@ -12,45 +12,61 @@ typedef uint32_t u32;
 #define MODE1_GBA_BG_CLIP_X 240
 #define MODE1_WS_SHADOW_COLS 32
 #define MODE1_WS_SHADOW_ROWS 32
-static struct { int scroll_x, scroll_y, origin_x, origin_y, width, height, scrollAction, area, room; } gRoomControls;
+typedef struct { int action; struct { s32 WORD; } x, y; } Entity;
+typedef struct { Entity base; } PlayerEntity;
+static PlayerEntity gPlayerEntity;
+static unsigned char gUpdateVisibleTiles;
+#define Q_16_16(n) ((s32)((n) * 65536))
+typedef struct { int scroll_x, scroll_y, origin_x, origin_y, width, height, scrollAction, area, room;
+                 int scroll_flags, scroll_direction, unk_18; Entity* camera_target; } RoomControls;
+static RoomControls gRoomControls;
 static struct { unsigned active, xPos, yPos, width, height; } gCurrentWindow;
 static int virtuappu_mode1_ws_shadow_base_tile[4];
 static u16* virtuappu_mode1_ws_shadow[4];
 static u32 sWsContentKey;
 static int sWsContentPx;
+static int sWsLatchedFrameWidth = 240;
 static int enabled = 1;
 static int Port_Config_WidescreenEnabled(void) { return enabled; }
 static int Port_Widescreen_TargetViewWidth(void) { return 384; }
 static int Port_WidescreenEffectiveTarget(void) { return gRoomControls.width < 384 ? gRoomControls.width : 384; }
 static u32 Port_WidescreenRoomKey(void) { return 1; }
 int Port_Widescreen_FallbackNative(void);
-static int Port_Widescreen_EffectiveViewWidth(void) { return Port_Widescreen_FallbackNative() ? 240 : Port_WidescreenEffectiveTarget(); }
 /* Only unrelated task/HUD dependencies are stubbed; shadow publication runs
  * the production UpdateShadows body, including its area and BG gates. */
 enum { TASK_GAME = 2, AREA_MINISH_WOODS = 0x0b, AREA_HYRULE_FIELD = 0x0a,
        AREA_CAVE_OF_FLAMES = 0x60, MANAGER = 9, ENTER_ROOM_TEXTBOX_MANAGER = 1 };
 #define MODE1_GBA_BG_COUNT 4
+#define DISPCNT_BG0_ON 0x100
+#define DISPCNT_BG1_ON 0x200
+#define DISPCNT_BG2_ON 0x400
 #define DISPCNT_BG3_ON 0x800
+#define DISPCNT_FORCED_BLANK 0x80
+static struct { int active; } gFadeControl;
 static struct { int task; } gMain;
-typedef struct { u32 control; int yOffset; } TestBg;
-static struct { TestBg bg0, bg1, bg2, bg3; struct { int displayControl; } lcd; } gScreen;
+typedef struct { u32 control; int yOffset; void* subTileMap; } TestBg;
+static struct { TestBg bg0, bg1, bg2, bg3; struct { int displayControl; } lcd;
+                struct { u16 window0HorizontalDimensions, window1HorizontalDimensions; } controls; } gScreen;
+static void port_ws_window_latch(u16 w0, u16 w1) { (void)w0; (void)w1; }
 static struct { TestBg* bgSettings; } gMapBottom, gMapTop;
-static u16 gMapDataBottomSpecial[128*128], gMapDataTopSpecial[128*128];
+static u16 gMapDataBottomSpecial[0x4000], gMapDataTopSpecial[0x4000];
 static u16 sWsShadowBG1[32*32], sWsShadowBG2[32*32], sWsShadowOverlay[32*32];
+static u16 sWsShadowSource[4][32*32];
 static u16 vram[0x18000/2];
 #define gVram ((unsigned char*)vram)
 static int virtuappu_mode1_ws_hud_right_anchor, virtuappu_mode1_ws_msg_shift;
 static int virtuappu_mode1_ws_msg_x0, virtuappu_mode1_ws_msg_x1;
 static int virtuappu_mode1_ws_msg_y0, virtuappu_mode1_ws_msg_y1;
-static int Port_WidescreenScanContentPx(void) { return 1024; }
+static __attribute__((unused)) int Port_WidescreenScanContentPx(void) { return 1024; }
 static int Port_Widescreen_IsActive(void) { return gMain.task == TASK_GAME && !Port_Widescreen_FallbackNative(); }
 static int Port_Widescreen_HudRightAnchor(void) { return 0; }
-typedef struct { int action; } Entity;
+static void Port_Widescreen_RescanRoomContent(void) {}
 static Entity* FindEntityByID(int kind, int id, int list) { (void)kind; (void)id; (void)list; return NULL; }
 #include "widescreen_helpers.h"
 static int errors;
 #define CHECK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #cond); ++errors; } } while (0)
 int main(void) {
+    gMain.task = TASK_GAME;
     gRoomControls.width = 1024;
     gRoomControls.height = 1024;
     static u16 map[128*128], shadow[MODE1_WS_SHADOW_COLS*32];
@@ -58,7 +74,7 @@ int main(void) {
     gRoomControls.scroll_y = 16;
     for (int phase=0; phase<16; ++phase) {
         gRoomControls.scroll_x = 64 + phase;
-        Port_WidescreenShadow_Populate(1, map, shadow);
+        Port_WidescreenShadow_Populate(1, map, NULL, shadow);
         for (int shake=-3; shake<=3; ++shake) {
             for (int x=240; x<384; ++x) {
                 int col = ((x+phase+shake)&255)/8;
@@ -81,7 +97,7 @@ int main(void) {
     gRoomControls.scroll_x = 0;
     for (int y = 0; y < 8; ++y) {
         gRoomControls.scroll_y = y;
-        Port_WidescreenShadow_Populate(1, map, shadow);
+        Port_WidescreenShadow_Populate(1, map, NULL, shadow);
         for (int shake = -3; shake < 0; ++shake) {
             int row = (8 + y + shake) / 8;
             CHECK(shadow[row * 32 + 1] == map[30]);
@@ -91,7 +107,7 @@ int main(void) {
     /* Room-edge padding stays transparent even when the backing map is stale. */
     gRoomControls.scroll_x = 0;
     gRoomControls.width = 256;
-    Port_WidescreenShadow_Populate(1, map, shadow);
+    Port_WidescreenShadow_Populate(1, map, NULL, shadow);
     CHECK(shadow[2] == map[128+31]);
     CHECK(shadow[3] == 0);
     gRoomControls.scrollAction = 1;
@@ -110,30 +126,78 @@ int main(void) {
     for (int row = 0; row < 32; ++row)
         for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col)
             CHECK(shadow[row * MODE1_WS_SHADOW_COLS + col] == screen[row * 32 + (col & 31)]);
-    /* All three repeating overlays must publish the complete screenblock;
-     * disabled overlays, unrelated canvases and native mode must not. */
+    /* Any 256x256 BG3 canvas beside a live map publishes its own screenblock;
+     * disabled, wide-sized, mapless and native cases must not. */
     memcpy(gVram + 0xf000, screen, sizeof(screen));
+    memcpy(gVram + 0xe800, screen, sizeof(screen));
     gMain.task = TASK_GAME;
     gRoomControls.width = 1024;
-    const struct { int area, control, enabled, wide, expected; } overlays[] = {
-        { AREA_MINISH_WOODS, 0x1e04, 1, 1, 1 },
-        { AREA_HYRULE_FIELD, 0x1e05, 1, 1, 1 },
-        { AREA_CAVE_OF_FLAMES, 0x1e04, 1, 1, 1 },
-        { AREA_HYRULE_FIELD, 0x1e05, 0, 1, 0 },
-        { AREA_HYRULE_FIELD, 0x1e05, 1, 0, 0 },
-        { AREA_HYRULE_FIELD, 0x1d05, 1, 1, 0 },
-        { 0, 0x1e04, 1, 1, 0 },
+    static TestBg overlayMap = { 0x1c00, 0, NULL };
+    gScreen.bg1.control = 0x1c00;
+    const struct { int area, control, enabled, wide, map, expected; } overlays[] = {
+        { AREA_MINISH_WOODS, 0x1e04, 1, 1, 1, 1 },
+        { AREA_HYRULE_FIELD, 0x1e05, 1, 1, 1, 1 },
+        { 0x1a, 0x1e07, 1, 1, 1, 1 },      /* Veil Springs sky */
+        { 0x35, 0x1d0c, 1, 1, 1, 1 },      /* darkness overlay, other screenblock */
+        { 0x0b, 0x1e44, 1, 1, 1, 1 },      /* mosaic bit during a fade */
+        { AREA_HYRULE_FIELD, 0x1e05, 0, 1, 1, 0 },
+        { AREA_HYRULE_FIELD, 0x1e05, 1, 0, 1, 0 },
+        { AREA_HYRULE_FIELD, 0x5e05, 1, 1, 1, 0 }, /* 512 wide renders natively */
+        { AREA_HYRULE_FIELD, 0x9e05, 1, 1, 1, 0 }, /* 512 tall: no second block */
+        { AREA_HYRULE_FIELD, 0x1e05, 1, 1, 0, 0 }, /* overlay screen, no map */
     };
     for (unsigned i = 0; i < sizeof(overlays)/sizeof(overlays[0]); ++i) {
         gRoomControls.area = overlays[i].area;
         gScreen.bg3.control = overlays[i].control;
         gScreen.lcd.displayControl = overlays[i].enabled ? DISPCNT_BG3_ON : 0;
+        gMapBottom.bgSettings = overlays[i].map ? &overlayMap : NULL;
         enabled = overlays[i].wide;
         Port_Widescreen_UpdateShadows();
         CHECK((virtuappu_mode1_ws_shadow[3] != NULL) == overlays[i].expected);
         if (overlays[i].expected && virtuappu_mode1_ws_shadow[3])
             CHECK(memcmp(virtuappu_mode1_ws_shadow[3], screen, sizeof(screen)) == 0);
+        if (!overlays[i].map)
+            CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
     }
+    /* A parallax BG copied out of a wider image continues that image from
+     * tile column 30 of the copied window; past the buffer end it is empty. */
+    static u16 image[32 * 128], window[32 * 32];
+    for (int i = 0; i < 32 * 128; ++i) image[i] = (u16)(0x100 + i);
+    const int start = 6;
+    Port_Widescreen_BgWindowSource(window, image + start, image + 32 * 128);
+    gScreen.bg1.subTileMap = window;
+    gScreen.bg1.control = 0x1d47;
+    gScreen.bg3.control = 0;
+    gScreen.lcd.displayControl = DISPCNT_BG1_ON;
+    static TestBg rafterMap = { 0x1c42, 0, NULL };
+    gScreen.bg2.control = 0x1c42;
+    gMapBottom.bgSettings = &rafterMap;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] == sWsShadowSource[1]);
+    CHECK(virtuappu_mode1_ws_shadow_base_tile[1] == 30);
+    if (virtuappu_mode1_ws_shadow[1] == sWsShadowSource[1]) {
+        for (int row = 0; row < 32; ++row)
+            for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col)
+                CHECK(sWsShadowSource[1][row * MODE1_WS_SHADOW_COLS + col] == image[row * 128 + start + 30 + col]);
+    }
+    Port_Widescreen_BgWindowSource(window, image + 32 * 128 - 40, image + 32 * 128);
+    Port_Widescreen_UpdateShadows();
+    CHECK(sWsShadowSource[1][9] == image[32 * 128 - 1]);
+    CHECK(sWsShadowSource[1][10] == 0);
+    /* Another subTileMap (a plain map BG swapped in) gets no source shadow. */
+    gScreen.bg1.subTileMap = image;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] == NULL);
+    gScreen.bg1.subTileMap = NULL;
+    gScreen.bg2.control = 0;
+    /* A map rendered as BG3 keeps its map shadow. */
+    gScreen.bg3.control = 0x1c03;
+    gScreen.bg1.control = 0x1b00;
+    gScreen.lcd.displayControl = DISPCNT_BG3_ON;
+    gMapBottom.bgSettings = &overlayMap;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[3] == sWsShadowBG1);
+    gMapBottom.bgSettings = NULL;
     enabled = 1;
     int x,y,w,h;
     gCurrentWindow.active=0;
@@ -149,6 +213,194 @@ int main(void) {
     CHECK(x==104 && y==24 && w==32 && h==16);
     gCurrentWindow.active=0;
     CHECK(!Message_GetWindowRect(&x,&y,&w,&h));
-    if (!errors) puts("widescreen engine: shake continuity, iris width/camera, live message window passed");
+    /* Present width is latched at vblank with the shadows it frames. */
+    gMain.task = TASK_GAME;
+    gRoomControls.width = 1024;
+    gRoomControls.scrollAction = 1;
+    gScreen.bg1.control = 0x1d00;
+    static TestBg mapBg = { 0x1d00, 0, NULL };
+    gMapBottom.bgSettings = &mapBg;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 384);
+    enabled = 0;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
+    enabled = 1;
+    gMapBottom.bgSettings = NULL;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 240); /* overlay screen: no map shadow */
+
+    /* Room reloads blank the map BGs while the width is 0 or a fade runs:
+     * the wide width holds across them instead of flashing 240 bars. */
+    gMapBottom.bgSettings = &mapBg;
+    gScreen.lcd.displayControl = DISPCNT_BG1_ON;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 384);
+    gScreen.lcd.displayControl = DISPCNT_BG0_ON;
+    gMapBottom.bgSettings = NULL;
+    gRoomControls.width = 0;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 384);
+    gRoomControls.width = 1024;
+    gFadeControl.active = 1;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 384);
+    gFadeControl.active = 0;
+    gScreen.lcd.displayControl = DISPCNT_BG0_ON | DISPCNT_FORCED_BLANK;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 384);
+    /* A steady BG0-only screen is a native overlay, not a reload. */
+    gScreen.lcd.displayControl = DISPCNT_BG0_ON;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
+    /* Holding never widens a native frame, and a disabled option drops it. */
+    gRoomControls.width = 0;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
+    gRoomControls.width = 1024;
+    gMapBottom.bgSettings = &mapBg;
+    gScreen.lcd.displayControl = DISPCNT_BG1_ON;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 384);
+    gScreen.lcd.displayControl = DISPCNT_BG0_ON;
+    gRoomControls.width = 0;
+    enabled = 0;
+    Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
+    enabled = 1;
+    gRoomControls.width = 1024;
+    gMapBottom.bgSettings = NULL;
+
+    /* Wide rolling transition to the right: the outgoing room (x 0..511)
+     * stays visible beside the destination (x 512..1023) for the whole
+     * scroll, and the camera lands on the destination's rest. */
+    for (int i = 0; i < 0x4000; ++i) gMapDataBottomSpecial[i] = (u16)(0x1000 + (i & 0x7ff));
+    gRoomControls = (RoomControls){ .scroll_x = 128, .scroll_y = 0, .origin_x = 0, .origin_y = 0,
+                                    .width = 512, .height = 256, .scrollAction = 1, .scroll_direction = 1,
+                                    .camera_target = &gPlayerEntity.base };
+    gPlayerEntity.base.x.WORD = 500 << 16;
+    gPlayerEntity.base.y.WORD = 100 << 16;
+    Port_Widescreen_RollBegin();
+    gRoomControls.scrollAction = 2;
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
+    /* GameMain swaps in the destination after Scroll2Sub0. */
+    for (int i = 0; i < 0x4000; ++i) gMapDataBottomSpecial[i] = (u16)(0x5000 + (i & 0x7ff));
+    gRoomControls.origin_x = 512;
+    Port_Widescreen_RollStart();
+    int prev = gRoomControls.scroll_x;
+    for (int k = 1; k < 0x3c; ++k) {
+        gRoomControls.unk_18 = k;
+        gPlayerEntity.base.x.WORD += Q_16_16(0.25);
+        gRoomControls.scroll_x += 4;
+        Port_Widescreen_RollStep();
+        CHECK(gRoomControls.scroll_x >= prev && gRoomControls.scroll_x <= 512);
+        CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
+        prev = gRoomControls.scroll_x;
+        if (k == 30) {
+            CHECK(gRoomControls.scroll_x == 320);
+            static u16 buffer[32 * 32];
+            Port_WidescreenRollComposeBuffer(gMapDataBottomSpecial, sWsRollBottom, buffer);
+            /* Buffer row 1 = map row 0 (row 0 is the padding row above). */
+            CHECK(buffer[32 + 0] == sWsRollBottom[40]);   /* x 320: outgoing room */
+            CHECK(buffer[32 + 23] == sWsRollBottom[63]);  /* x 504: outgoing edge */
+            CHECK(buffer[32 + 24] == gMapDataBottomSpecial[0]); /* x 512: destination */
+            Port_WidescreenShadow_Populate(1, gMapDataBottomSpecial, sWsRollBottom, shadow);
+            CHECK(shadow[32 + 1] == gMapDataBottomSpecial[6]); /* display x 240 = world 560 */
+        }
+    }
+    CHECK(prev == 128 + 384 * 59 / 60);
+    gRoomControls.scrollAction = 0;
+    CHECK(Port_Widescreen_RollEnd() == 1);
+    CHECK(Port_Widescreen_CameraRestX(gPlayerEntity.base.x.WORD >> 16) == 512);
+
+    /* Downward: the reveal rows above the destination come from the room left. */
+    for (int i = 0; i < 0x4000; ++i) gMapDataBottomSpecial[i] = (u16)(0x1000 + (i & 0x7ff));
+    gRoomControls = (RoomControls){ .scroll_x = 0, .scroll_y = 96, .origin_x = 0, .origin_y = 0,
+                                    .width = 512, .height = 256, .scrollAction = 1, .scroll_direction = 2,
+                                    .camera_target = &gPlayerEntity.base };
+    Port_Widescreen_RollBegin();
+    gRoomControls.scrollAction = 2;
+    for (int i = 0; i < 0x4000; ++i) gMapDataBottomSpecial[i] = (u16)(0x5000 + (i & 0x7ff));
+    gRoomControls.origin_y = 256;
+    gRoomControls.scroll_y = 176; /* 80px into the scroll */
+    Port_WidescreenShadow_Populate(1, gMapDataBottomSpecial, sWsRollBottom, shadow);
+    /* Shadow row sr = world tile row 2*floor(-80/16) - 1 + sr relative to y=256. */
+    CHECK(shadow[1 * 32 + 1] == sWsRollBottom[(32 - 10) * 128 + 30]); /* old room, row 22 */
+    CHECK(shadow[11 * 32 + 1] == gMapDataBottomSpecial[0 * 128 + 30]); /* new room, row 0 */
+    gRoomControls.scrollAction = 0;
+    Port_Widescreen_RollEnd();
+
+    /* A transition that starts native stays native (no composite, no snap). */
+    gRoomControls.width = 240;
+    gRoomControls.scrollAction = 1;
+    Port_Widescreen_RollBegin();
+    gRoomControls.scrollAction = 2;
+    gRoomControls.width = 1024;
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 240);
+    CHECK(!Port_WidescreenRollComposite());
+    gRoomControls.scrollAction = 0;
+    CHECK(Port_Widescreen_RollEnd() == 0);
+
+    /* Castle throne room (272 wide) down into the hall (496 wide, further
+     * left): while throne-room rows show, the view keeps to its columns
+     * instead of panning toward the hall's rest into world outside both
+     * rooms. The handoff keeps the view centre for Scroll1 to pan on. */
+    gRoomControls = (RoomControls){ .scroll_x = 384, .scroll_y = 208, .origin_x = 384, .origin_y = 16,
+                                    .width = 272, .height = 352, .scrollAction = 1, .scroll_direction = 2,
+                                    .camera_target = &gPlayerEntity.base };
+    gPlayerEntity.base.x.WORD = 408 << 16;
+    gPlayerEntity.base.y.WORD = 362 << 16;
+    Port_Widescreen_RollBegin();
+    gRoomControls.scrollAction = 2;
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
+    gRoomControls.origin_x = 272;
+    gRoomControls.origin_y = 368;
+    gRoomControls.width = 496;
+    gRoomControls.height = 528;
+    Port_Widescreen_RollStart();
+    for (int k = 1; k < 0x28; ++k) {
+        gRoomControls.unk_18 = k;
+        gPlayerEntity.base.y.WORD += Q_16_16(0.375);
+        gRoomControls.scroll_y += 4;
+        Port_Widescreen_RollStep();
+        CHECK(gRoomControls.scroll_x == 384);
+    }
+    gRoomControls.scrollAction = 0;
+    CHECK(Port_Widescreen_RollEnd() == 1);
+    gRoomControls.scroll_x = 272; /* sub_080809D4's rest snap */
+    Port_Widescreen_RollHandoff();
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
+    CHECK(gRoomControls.scroll_x == 384 + 272 / 2 - 384 / 2);
+
+    /* Back up: the hall's 384 view would flank the 272 throne room with void
+     * for the whole roll, so the roll narrows to 272 at the start, centred
+     * and inside both rooms. */
+    gRoomControls = (RoomControls){ .scroll_x = 272, .scroll_y = 368, .origin_x = 272, .origin_y = 368,
+                                    .width = 496, .height = 528, .scrollAction = 1, .scroll_direction = 0,
+                                    .camera_target = &gPlayerEntity.base };
+    gPlayerEntity.base.x.WORD = 440 << 16;
+    gPlayerEntity.base.y.WORD = 372 << 16;
+    Port_Widescreen_RollBegin();
+    gRoomControls.scrollAction = 2;
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
+    gRoomControls.origin_x = 384;
+    gRoomControls.origin_y = 16;
+    gRoomControls.width = 272;
+    gRoomControls.height = 352;
+    Port_Widescreen_RollStart();
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
+    CHECK(gRoomControls.scroll_x == 384);
+    for (int k = 1; k < 0x28; ++k) {
+        gRoomControls.unk_18 = k;
+        gPlayerEntity.base.y.WORD -= Q_16_16(0.375);
+        gRoomControls.scroll_y -= 4;
+        Port_Widescreen_RollStep();
+        CHECK(gRoomControls.scroll_x == 384);
+        CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
+    }
+    gRoomControls.scrollAction = 0;
+    Port_Widescreen_RollEnd();
+
+    if (!errors) puts("widescreen engine: shake continuity, iris width/camera, live message window, frame latch, two-room rolling, mismatched-room rolls passed");
     return errors != 0;
 }
