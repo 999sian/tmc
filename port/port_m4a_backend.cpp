@@ -91,6 +91,14 @@ struct BackendState {
      * soft-clips and quantizes exactly once. */
     std::vector<float> pendingSamples;
     size_t pendingFrameOffset = 0;
+    /* Declick. A stopped or replaced player drops its voices between two
+     * chunks, a step the size of the signal. The next chunk then starts from
+     * the last emitted sample and decays to the new signal over ~3 ms
+     * (declick), and mute ramps the gain over 5 ms instead of zeroing. */
+    float lastOut[2] = { 0.0f, 0.0f };
+    float declick[2] = { 0.0f, 0.0f };
+    bool cutPending = false;
+    float muteGain = 1.0f;
     std::array<size_t, kSongCount> songHeaderOffsets;
     uint8_t trackVolumes[kPlayerCount][kMaxTracks];
     int8_t trackPans[kPlayerCount][kMaxTracks];
@@ -568,6 +576,7 @@ static void RebuildContext(void) {
         }
         sState.pendingSamples.clear();
         sState.pendingFrameOffset = 0;
+        sState.cutPending = true; /* the old context's voices stop here */
         /* Swap rather than assign so the old context outlives the lock. */
         sState.ctx.swap(ctx);
         sState.rom.swap(rom);
@@ -800,6 +809,8 @@ static void StartSongLocked(uint8_t playerIndex, uint16_t songId) {
         if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount && sState.currentSongId[playerIndex] == songId) {
             return;
         }
+        if (playerIndex < kPlayerCount && sState.currentSongId[playerIndex] != 0)
+            sState.cutPending = true; /* replaces a sounding song */
         sState.ctx->m4aMPlayStart(playerIndex, songPos);
         if (playerIndex < kPlayerCount)
             sState.currentSongId[playerIndex] = songId;
@@ -820,6 +831,8 @@ static void StopPlayerLocked(uint8_t playerIndex) {
     if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
         return;
     }
+    if (playerIndex < kPlayerCount && sState.currentSongId[playerIndex] != 0)
+        sState.cutPending = true;
     sState.ctx->m4aMPlayStop(playerIndex);
     if (playerIndex < kPlayerCount)
         sState.currentSongId[playerIndex] = 0;
@@ -1067,6 +1080,11 @@ void Port_M4A_Backend_Render(float* outSamples, uint32_t frameCount, bool mute) 
 
             if (sState.pendingFrameOffset >= sState.pendingSamples.size() / 2) {
                 RenderChunkLocked();
+                if (sState.cutPending && sState.pendingSamples.size() >= 2) {
+                    sState.declick[0] += sState.lastOut[0] - sState.pendingSamples[0];
+                    sState.declick[1] += sState.lastOut[1] - sState.pendingSamples[1];
+                }
+                sState.cutPending = false;
                 /* A chunk advanced player state — republish the lock-free liveness
                  * mask so the main thread's duck sees the jingle end promptly. */
                 PublishActivePlayerMaskLocked();
@@ -1079,11 +1097,22 @@ void Port_M4A_Backend_Render(float* outSamples, uint32_t frameCount, bool mute) 
             }
 
             copyFrames = std::min<size_t>(availableFrames, framesRemaining);
-            if (mute) {
-                memset(outSamples, 0, sizeof(float) * copyFrames * 2);
-            } else {
-                memcpy(outSamples, &sState.pendingSamples[sState.pendingFrameOffset * 2],
-                       sizeof(float) * copyFrames * 2);
+            {
+                /* 3 ms declick decay, 5 ms mute ramp, at the output rate. */
+                const float decay = std::exp(-1.0f / (0.003f * (float)sState.sampleRate));
+                const float ramp = 1.0f / (0.005f * (float)sState.sampleRate);
+                const float target = mute ? 0.0f : 1.0f;
+                const float* src = &sState.pendingSamples[sState.pendingFrameOffset * 2];
+                for (size_t f = 0; f < copyFrames; ++f) {
+                    float& g = sState.muteGain;
+                    g = g < target ? std::min(target, g + ramp) : std::max(target, g - ramp);
+                    for (int ch = 0; ch < 2; ++ch) {
+                        const float x = src[f * 2 + ch] + sState.declick[ch];
+                        sState.declick[ch] *= decay;
+                        sState.lastOut[ch] = x;
+                        outSamples[f * 2 + ch] = x * g;
+                    }
+                }
             }
 
             outSamples += copyFrames * 2;

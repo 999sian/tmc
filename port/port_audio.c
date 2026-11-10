@@ -6,6 +6,7 @@
 #include "port_debug_verbose.h"
 
 #include <math.h>
+#include <string.h>
 
 enum {
     PORT_AUDIO_SAMPLE_RATE = 48000,
@@ -51,14 +52,18 @@ static float sWidth = 1.20f;
  *      1.20 (the long-standing shipped value) and is runtime-settable
  *      via the F8 → Audio "Stereo width" slider (sWidth).
  *
- *   3. Soft saturation via tanh-style curve — peaks above 25 000 round
- *      off smoothly instead of flattening, preserving perceived loudness
- *      on dense passages (multiple lead voices). This is intentionally
- *      the ONLY dynamics processing: no compressor/limiter, because a
- *      time-constant'd glue stage would pump on TMC's dense ~60 Hz
- *      transient stream and smear the staccato PSG snap. There is no
- *      makeup gain — the chain only ever shapes, never lifts. Overs
- *      reach this stage intact (the backend no longer hard-clamps).
+ *   3. Lookahead peak limiter, stereo-linked, threshold 30 000. Music
+ *      alone stays under it (the audio audit's 98 BGMs peak below the
+ *      soft-clip knee but for a few brief touches), so it never pumps the
+ *      score; it engages when sound effects stack on loud passages, where
+ *      the raw mix reaches ~1.6x full scale. 1.3 ms lookahead lets the
+ *      gain arrive before the peak; 80 ms release. No makeup gain.
+ *
+ *   4. Soft saturation via tanh-style curve — peaks above 25 000 round
+ *      off smoothly instead of flattening. After the limiter it only
+ *      bends the top few dB; it remains the guarantee that the int16
+ *      cast cannot overflow. Overs reach the chain intact (the backend
+ *      no longer hard-clamps).
  *
  * Any musical reverb lives SYNTH-SIDE (agbplay's PCM-only comb, F8 →
  * Audio "Reverb"), NOT here: an output-stage reverb would act on the
@@ -79,11 +84,52 @@ static float sHpPrevOutL = 0.0f, sHpPrevOutR = 0.0f;
  * thread so it never races the callback reading these statics mid-buffer. */
 static int sFilterClearPending = 0;
 
+/* Limiter state (stage 3). kLimLook frames of delay; sLimCut holds each
+ * buffered frame's required gain reduction (1 - gain, so zeroed state means
+ * none) and the window maximum covers the peak before it is emitted.
+ * sLimHot counts buffered frames needing any reduction. */
+enum { kLimLook = 64 };
+static const float kLimThreshold = 30000.0f;
+static float sLimBuf[kLimLook][2];
+static float sLimCut[kLimLook];
+static int sLimPos = 0, sLimHot = 0;
+static float sLimGain = 1.0f;
+
 /* Zero the HPF/LPF biquad history. Single source of truth so the reset path
  * and the GBA-accurate toggle (which clears on entry to keep re-engagement
  * click-free) can't drift if a future IIR stage adds more state. */
 static inline void Port_Audio_ClearFilterState(void) {
     sHpPrevInL = sHpPrevInR = sHpPrevOutL = sHpPrevOutR = 0.0f;
+    memset(sLimBuf, 0, sizeof sLimBuf);
+    memset(sLimCut, 0, sizeof sLimCut);
+    sLimPos = sLimHot = 0;
+    sLimGain = 1.0f;
+}
+
+/* Stage 3: one frame in, the frame kLimLook ago out, scaled. */
+static inline void Port_Audio_Limit(float* l, float* r) {
+    /* Attack reaches the window's gain within the lookahead; release ~80 ms. */
+    static const float kAttack = 0.0752f;   /* 1 - exp(-1 / (64 / 5)) */
+    static const float kRelease = 0.00026f; /* 1 - exp(-1 / (0.08 * 48000)) */
+    const float peak = fabsf(*l) > fabsf(*r) ? fabsf(*l) : fabsf(*r);
+    const float cut = peak > kLimThreshold ? 1.0f - kLimThreshold / peak : 0.0f;
+    const float outL = sLimBuf[sLimPos][0], outR = sLimBuf[sLimPos][1];
+    float maxCut = cut;
+    sLimHot -= sLimCut[sLimPos] > 0.0f;
+    sLimBuf[sLimPos][0] = *l;
+    sLimBuf[sLimPos][1] = *r;
+    sLimCut[sLimPos] = cut;
+    sLimHot += cut > 0.0f;
+    sLimPos = (sLimPos + 1) & (kLimLook - 1);
+    if (sLimHot > 0) {
+        for (int i = 0; i < kLimLook; ++i)
+            if (sLimCut[i] > maxCut)
+                maxCut = sLimCut[i];
+    }
+    const float target = 1.0f - maxCut;
+    sLimGain += (target - sLimGain) * (target < sLimGain ? kAttack : kRelease);
+    *l = outL * sLimGain;
+    *r = outR * sLimGain;
 }
 
 static inline float Port_Audio_SoftClip(float x) {
@@ -144,9 +190,11 @@ static void Port_Audio_PostProcess(const float* in, int16_t* out, int frames) {
         const float mid = (hpL + hpR) * 0.5f;
         const float side = (hpL - hpR) * 0.5f * w;
 
-        /* 3. Soft-clip, then the single rounding to int16. */
-        out[i * 2 + 0] = (int16_t)lrintf(Port_Audio_SoftClip(mid + side));
-        out[i * 2 + 1] = (int16_t)lrintf(Port_Audio_SoftClip(mid - side));
+        /* 3. Limit, 4. soft-clip, then the single rounding to int16. */
+        float ol = mid + side, or_ = mid - side;
+        Port_Audio_Limit(&ol, &or_);
+        out[i * 2 + 0] = (int16_t)lrintf(Port_Audio_SoftClip(ol));
+        out[i * 2 + 1] = (int16_t)lrintf(Port_Audio_SoftClip(or_));
     }
 }
 
@@ -237,6 +285,13 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
             sMaxWorkMs = workMs;
     }
 }
+
+#ifdef TMC_REPRO_HARNESS
+/* Offline render audit (port_repro_audio.c) runs the same chain. */
+void Port_Audio_PostProcessForAudit(const float* in, int16_t* out, int frames) {
+    Port_Audio_PostProcess(in, out, frames);
+}
+#endif
 
 bool Port_Audio_Init(void) {
     SDL_AudioSpec spec;
