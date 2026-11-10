@@ -567,6 +567,18 @@ jobs:
           xmake build -y debug_actions_test
           ./build/pc/debug_actions_test
 
+      - name: Run widescreen tests (Linux x86_64)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64'
+        shell: bash
+        # ROM-free regression tests: the widescreen engine (rolls, easing,
+        # camera, shadows), scroll states and PPU window helpers are extracted
+        # from the production sources and compiled against stubs. Each exits
+        # nonzero on any failure.
+        run: |
+          python3 tools/widescreen_engine_regression_test.py
+          python3 tools/widescreen_regression_test.py
+          python3 tools/widescreen_scroll_regression_test.py
+
       - name: Smoke test tmc_pc headless (Linux)
         if: matrix.os_name == 'linux'
         shell: bash

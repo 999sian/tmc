@@ -25,6 +25,7 @@ void Port_Widescreen_RollBegin(void) {}
 void Port_Widescreen_RollStart(void) {}
 void Port_Widescreen_RollStep(void) {}
 int Port_Widescreen_RollEnd(void) { return 0; }
+void Port_Widescreen_RollHandoff(void) {}
 void Port_Widescreen_RollComposeVram(void) {}
 int Port_Widescreen_CameraRestX(int x) {
     int width = Port_Widescreen_EffectiveViewWidth();
