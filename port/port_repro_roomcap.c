@@ -1154,7 +1154,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
 
     /* ---- TMC_ROOMCAP_ROLL_PROBE=<up|right|down|left>: edge-scroll ------
      * Walks Link across the room edge and checks the widescreen rolling
-     * transition: the presented width never changes mid-roll, the camera
+     * transition: the presented width eases one way in small steps, the camera
      * moves monotonically, and it hands over to the follow camera without
      * a jump. Captures <OUT base>_roll_{05,30,end}.png. Exits 0/5. */
     {
@@ -1237,13 +1237,19 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                         break;
                     }
                     if (gRoomControls.unk_18 >= 1) {
-                        if (rwidth < 0)
-                            rwidth = latched;
-                        if (latched != rwidth) {
+                        /* The width may ease between the rooms' widths, but
+                         * one way only and in small steps: a jump or a
+                         * reversal is a pillarbox pop. */
+                        static int rwdir = 0;
+                        const int dw = rwidth < 0 ? 0 : latched - rwidth;
+                        if (dw > 16 || dw < -16 || (dw && rwdir && (dw > 0) != (rwdir > 0))) {
                             fprintf(stderr, "[roll-probe] FAIL presented width %d -> %d at step %d\n", rwidth, latched,
                                     (int)gRoomControls.unk_18);
                             rfail = 1;
                         }
+                        if (dw)
+                            rwdir = dw;
+                        rwidth = latched;
                     }
                     if ((rdir == 1 || rdir == 2) ? pos < rlast : pos > rlast) {
                         fprintf(stderr, "[roll-probe] FAIL camera reversed %d -> %d\n", rlast, pos);
@@ -1252,8 +1258,8 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     if (gRoomControls.unk_18 >= 2 && (pos - rlast > rstep || rlast - pos > rstep))
                         rstep = pos > rlast ? pos - rlast : rlast - pos;
                     if (getenv("TMC_ROOMCAP_ROLL_TRACE"))
-                        fprintf(stderr, "[roll-probe]   step %d scroll=(%d,%d) origin=(%d,%d) player=(%d,%d)\n",
-                                (int)gRoomControls.unk_18, (int)gRoomControls.scroll_x, (int)gRoomControls.scroll_y,
+                        fprintf(stderr, "[roll-probe]   step %d view=%d scroll=(%d,%d) origin=(%d,%d) player=(%d,%d)\n",
+                                (int)gRoomControls.unk_18, Port_Widescreen_EffectiveViewWidth(), (int)gRoomControls.scroll_x, (int)gRoomControls.scroll_y,
                                 (int)gRoomControls.origin_x, (int)gRoomControls.origin_y,
                                 (int)gPlayerEntity.base.x.HALF.HI, (int)gPlayerEntity.base.y.HALF.HI);
                     rlast = pos;

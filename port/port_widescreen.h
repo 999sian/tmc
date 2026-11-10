@@ -110,6 +110,8 @@ void Port_Widescreen_RollStep(void);
 int Port_Widescreen_RollEnd(void);
 /* Roll width at frame k of `frames` (eases start -> roll -> destination). */
 int Port_Widescreen_RollWidthAt(int fromW, int rollW, int toW, int k, int frames);
+/* Camera progress at roll frame k; `hold` keeps it at 0 for the width ease. */
+int Port_Widescreen_RollCameraK(int k, int frames, int hold);
 /* After the rest snap: resume from the roll's last view; Scroll1 pans on. */
 void Port_Widescreen_RollHandoff(void);
 void Port_Widescreen_RollComposeVram(void);

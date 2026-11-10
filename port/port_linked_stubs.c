@@ -1410,6 +1410,15 @@ int Port_Widescreen_RollWidthAt(int fromW, int rollW, int toW, int k, int frames
     return w & ~1;
 }
 
+/* Camera progress at roll frame k of `frames`. A roll that holds for its
+ * width ease (`hold`) stays at 0 for the ease frames, then covers the whole
+ * path in the frames left, ending where an unheld roll does. Pure, for tests. */
+int Port_Widescreen_RollCameraK(int k, int frames, int hold) {
+    if (!hold || frames <= kWsRollEase)
+        return k;
+    return k <= kWsRollEase ? 0 : (k - kWsRollEase) * frames / (frames - kWsRollEase);
+}
+
 /* Widest view a vertical roll can show at its current rows without void:
  * the columns shared by every room those rows cross. 0 for horizontal rolls
  * or when the rooms share fewer than 240 columns (void either way). */
@@ -1482,8 +1491,14 @@ void Port_Widescreen_RollStep(void) {
         s32 bottom = rc->origin_y + (s32)rc->height - 80;
         ey = (fy < bottom ? fy : bottom) - 80;
     }
-    rc->scroll_x = (s16)(sWsRoll.sx + (ex - sWsRoll.sx) * k / frames);
-    rc->scroll_y = (s16)(sWsRoll.sy + (ey - sWsRoll.sy) * k / frames);
+    /* A vertical roll into a narrower span cannot ease once the new room's
+     * rows are on screen: the columns beside them are void. So the camera
+     * holds for the ease, while only the outgoing room is in view, and makes
+     * the time up over the rest of the roll. The mirror of a widening roll,
+     * which holds its width to the end and eases after (tailK). */
+    const s32 kc = Port_Widescreen_RollCameraK(k, frames, !(rc->scroll_direction & 1) && sWsRoll.fromW > sWsRoll.rollW);
+    rc->scroll_x = (s16)(sWsRoll.sx + (ex - sWsRoll.sx) * kc / frames);
+    rc->scroll_y = (s16)(sWsRoll.sy + (ey - sWsRoll.sy) * kc / frames);
     sWsRoll.view = sWsRoll.rollW;
     Port_WidescreenRollClamp(rc, 0);
     {

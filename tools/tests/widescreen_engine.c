@@ -63,6 +63,7 @@ static int Port_Widescreen_HudRightAnchor(void) { return 0; }
 static void Port_Widescreen_RescanRoomContent(void) {}
 static Entity* FindEntityByID(int kind, int id, int list) { (void)kind; (void)id; (void)list; return NULL; }
 int Port_Widescreen_RollWidthAt(int fromW, int rollW, int toW, int k, int frames);
+int Port_Widescreen_RollCameraK(int k, int frames, int hold);
 #include "widescreen_helpers.h"
 static int errors;
 #define CHECK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #cond); ++errors; } } while (0)
@@ -405,15 +406,25 @@ int main(void) {
     Port_Widescreen_RollStart();
     CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
     CHECK(gRoomControls.scroll_x == 384 + 272 / 2 - 384 / 2);
-    for (int k = 1; k < 0x28; ++k) {
-        gRoomControls.unk_18 = k;
-        gPlayerEntity.base.y.WORD -= Q_16_16(0.375);
-        gRoomControls.scroll_y -= 4;
-        Port_Widescreen_RollStep();
-        /* The throne room's rows are on screen from the first frame, so the
-         * view is already inside its columns. */
-        CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
-        CHECK(gRoomControls.scroll_x == 384);
+    {
+        int prevW = 384, prevY = 368;
+        for (int k = 1; k < 0x28; ++k) {
+            gRoomControls.unk_18 = k;
+            gPlayerEntity.base.y.WORD -= Q_16_16(0.375);
+            gRoomControls.scroll_y -= 4;
+            Port_Widescreen_RollStep();
+            const int w = Port_Widescreen_EffectiveViewWidth();
+            /* The width eases down about the throne room's centre while the
+             * camera holds in the hall (the throne room's rows would bring
+             * void beside them), then the camera rolls at 272. */
+            CHECK(w <= prevW && prevW - w <= 12);
+            CHECK(gRoomControls.scroll_x + w / 2 == 384 + 272 / 2);
+            CHECK(k > 12 || gRoomControls.scroll_y == 368);
+            CHECK(k < 12 || w == 272);
+            CHECK(gRoomControls.scroll_y <= prevY);
+            prevW = w;
+            prevY = gRoomControls.scroll_y;
+        }
     }
     gRoomControls.scrollAction = 0;
     Port_Widescreen_RollEnd();
@@ -424,6 +435,20 @@ int main(void) {
     /* Width easing: monotone, starts at the start width, reaches the roll
      * width by frame 12 and the destination width by the last frame. */
     {
+        /* A narrowing vertical roll holds the camera while its width eases,
+         * then covers the whole path and ends where an unheld roll ends. */
+        {
+            int prevK = 0;
+            CHECK(Port_Widescreen_RollCameraK(7, 0x28, 0) == 7);
+            for (int k = 0; k <= 12; ++k)
+                CHECK(Port_Widescreen_RollCameraK(k, 0x28, 1) == 0);
+            CHECK(Port_Widescreen_RollCameraK(0x28, 0x28, 1) == 0x28);
+            for (int k = 1; k <= 0x28; ++k) {
+                const int kc = Port_Widescreen_RollCameraK(k, 0x28, 1);
+                CHECK(kc >= prevK && kc - prevK <= 2);
+                prevK = kc;
+            }
+        }
         int prev = Port_Widescreen_RollWidthAt(384, 240, 336, 0, 0x28);
         CHECK(prev == 384);
         CHECK(Port_Widescreen_RollWidthAt(384, 240, 336, 12, 0x28) == 240);
