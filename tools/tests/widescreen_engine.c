@@ -62,6 +62,7 @@ static int Port_Widescreen_IsActive(void) { return gMain.task == TASK_GAME && !P
 static int Port_Widescreen_HudRightAnchor(void) { return 0; }
 static void Port_Widescreen_RescanRoomContent(void) {}
 static Entity* FindEntityByID(int kind, int id, int list) { (void)kind; (void)id; (void)list; return NULL; }
+int Port_Widescreen_RollWidthAt(int fromW, int rollW, int toW, int k, int frames);
 #include "widescreen_helpers.h"
 static int errors;
 #define CHECK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #cond); ++errors; } } while (0)
@@ -363,18 +364,32 @@ int main(void) {
         gPlayerEntity.base.y.WORD += Q_16_16(0.375);
         gRoomControls.scroll_y += 4;
         Port_Widescreen_RollStep();
+        /* Throne-room columns while the throne room is on screen: widening
+         * early would show void beside it. */
+        CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
         CHECK(gRoomControls.scroll_x == 384);
     }
     gRoomControls.scrollAction = 0;
     CHECK(Port_Widescreen_RollEnd() == 1);
     gRoomControls.scroll_x = 272; /* sub_080809D4's rest snap */
     Port_Widescreen_RollHandoff();
-    CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
-    CHECK(gRoomControls.scroll_x == 384 + 272 / 2 - 384 / 2);
+    /* Then the hall's 384 over the next frames, not in one pop. */
+    {
+        int prev = Port_Widescreen_EffectiveViewWidth();
+        CHECK(prev > 272 && prev < 290);
+        CHECK(gRoomControls.scroll_x + prev / 2 == 384 + 272 / 2);
+        for (int k = 0; k < 12; ++k) {
+            Port_Widescreen_UpdateShadows();
+            const int w = Port_Widescreen_EffectiveViewWidth();
+            CHECK(w >= prev && w - prev <= 12);
+            prev = w;
+        }
+        CHECK(prev == 384);
+    }
 
     /* Back up: the hall's 384 view would flank the 272 throne room with void
-     * for the whole roll, so the roll narrows to 272 at the start, centred
-     * and inside both rooms. */
+     * for the whole roll, so the roll eases down to 272 over its first
+     * frames, centred and inside both rooms. */
     gRoomControls = (RoomControls){ .scroll_x = 272, .scroll_y = 368, .origin_x = 272, .origin_y = 368,
                                     .width = 496, .height = 528, .scrollAction = 1, .scroll_direction = 0,
                                     .camera_target = &gPlayerEntity.base };
@@ -388,15 +403,65 @@ int main(void) {
     gRoomControls.width = 272;
     gRoomControls.height = 352;
     Port_Widescreen_RollStart();
-    CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
-    CHECK(gRoomControls.scroll_x == 384);
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
+    CHECK(gRoomControls.scroll_x == 384 + 272 / 2 - 384 / 2);
     for (int k = 1; k < 0x28; ++k) {
         gRoomControls.unk_18 = k;
         gPlayerEntity.base.y.WORD -= Q_16_16(0.375);
         gRoomControls.scroll_y -= 4;
         Port_Widescreen_RollStep();
-        CHECK(gRoomControls.scroll_x == 384);
+        /* The throne room's rows are on screen from the first frame, so the
+         * view is already inside its columns. */
         CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
+        CHECK(gRoomControls.scroll_x == 384);
+    }
+    gRoomControls.scrollAction = 0;
+    Port_Widescreen_RollEnd();
+    for (int k = 0; k < 12; ++k)
+        Port_Widescreen_UpdateShadows();
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 272);
+
+    /* Width easing: monotone, starts at the start width, reaches the roll
+     * width by frame 12 and the destination width by the last frame. */
+    {
+        int prev = Port_Widescreen_RollWidthAt(384, 240, 336, 0, 0x28);
+        CHECK(prev == 384);
+        CHECK(Port_Widescreen_RollWidthAt(384, 240, 336, 12, 0x28) == 240);
+        CHECK(Port_Widescreen_RollWidthAt(384, 240, 336, 0x28 - 12, 0x28) == 240);
+        CHECK(Port_Widescreen_RollWidthAt(384, 240, 336, 0x28, 0x28) == 336);
+        for (int k = 1; k <= 0x28; ++k) {
+            const int w = Port_Widescreen_RollWidthAt(384, 240, 336, k, 0x28);
+            CHECK(k <= 12 ? w <= prev : w >= prev);
+            CHECK(w % 2 == 0);
+            prev = w;
+        }
+    }
+
+    /* Rooms offset sideways (Palace of Winds): 720-wide rooms sharing 240
+     * columns. The roll runs at the shared 240 so neither room shows void,
+     * then widens back to 384 inside the destination. */
+    gRoomControls = (RoomControls){ .scroll_x = 1040, .scroll_y = 2992, .origin_x = 1040, .origin_y = 2672,
+                                    .width = 720, .height = 480, .scrollAction = 1, .scroll_direction = 2,
+                                    .camera_target = &gPlayerEntity.base };
+    gPlayerEntity.base.x.WORD = 1160 << 16;
+    gPlayerEntity.base.y.WORD = 3146 << 16;
+    Port_Widescreen_RollBegin();
+    gRoomControls.scrollAction = 2;
+    CHECK(Port_Widescreen_EffectiveViewWidth() == 384);
+    gRoomControls.origin_x = 560;
+    gRoomControls.origin_y = 3152;
+    gRoomControls.width = 720;
+    gRoomControls.height = 320;
+    Port_Widescreen_RollStart();
+    for (int k = 1; k < 0x28; ++k) {
+        gRoomControls.unk_18 = k;
+        gPlayerEntity.base.y.WORD += Q_16_16(0.375);
+        gRoomControls.scroll_y += 4;
+        Port_Widescreen_RollStep();
+        if (k >= 12 && k <= 0x28 - 12) {
+            CHECK(Port_Widescreen_EffectiveViewWidth() == 240);
+            CHECK(gRoomControls.scroll_x == 1040); /* the shared columns */
+        }
     }
     gRoomControls.scrollAction = 0;
     Port_Widescreen_RollEnd();

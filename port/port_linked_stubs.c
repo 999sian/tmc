@@ -1050,11 +1050,14 @@ static int sWsLatchedFrameWidth = 240;
  * the reveal shadows alike. The camera is driven from its start position to
  * where the destination's steady camera will rest, so completion does not jump. */
 static u16 sWsRollBottom[0x4000];
+enum { kWsRollEase = 12 }; /* frames to ease the view width in or out */
 static u16 sWsRollTop[0x4000];
 static struct {
     int active; /* sub_0807BD14 until sub_0807FEC8 */
     int wide;   /* composite in use; view frozen at `view` */
-    int view;
+    int view;         /* width shown this frame */
+    int fromW, rollW, toW; /* start, mid-roll and destination steady widths */
+    int tailFrom, tailK;   /* after the roll: width it ended at, frames since */
     s32 ox, oy, w, h; /* outgoing room bounds, world px */
     s32 sx, sy;       /* camera when the scroll starts */
     s32 endCx, endY;  /* view centre x and top when the roll ends */
@@ -1205,7 +1208,16 @@ int Port_Widescreen_EffectiveViewWidth(void) {
         return sWsRoll.view;
     }
     eff = Port_WidescreenEffectiveTarget();
-    return eff > 240 ? (int)eff : 240;
+    if (eff <= 240)
+        return 240;
+    /* A roll that ended narrower (or wider) than the room's own width
+     * reaches it over the next frames; the follow camera keeps the centre. */
+    if (sWsRoll.tailK > 0) {
+        const int w = Port_Widescreen_RollWidthAt(sWsRoll.tailFrom, sWsRoll.tailFrom, (int)eff,
+                                                  kWsRollEase + sWsRoll.tailK, 2 * kWsRollEase);
+        return w > 240 ? w : 240;
+    }
+    return (int)eff;
 }
 
 /* View width the current room settles at once no transition effect runs. */
@@ -1288,6 +1300,7 @@ void Port_Widescreen_RollComposeVram(void) {
 /* sub_0807BD14, before the room bounds and maps are replaced. */
 void Port_Widescreen_RollBegin(void) {
     int view = Port_Widescreen_EffectiveViewWidth();
+    sWsRoll.tailK = 0;
     sWsRoll.active = 1;
     sWsRoll.view = view;
     /* scroll_flags bit 0 marks rooms whose special maps use another layout. */
@@ -1351,17 +1364,72 @@ static void Port_WidescreenRollClamp(RoomControls* rc, int all) {
 void Port_Widescreen_RollStart(void) {
     RoomControls* rc = &gRoomControls;
     if (Port_WidescreenRollComposite()) {
+        const s32 from = sWsRoll.view;
         s32 steadyW = Port_WidescreenSteadyViewWidth();
+        s32 rollW = from;
         if (steadyW < 240)
             steadyW = 240;
-        if (steadyW < sWsRoll.view) {
-            rc->scroll_x = (s16)(rc->scroll_x + (sWsRoll.view - steadyW) / 2);
-            sWsRoll.view = steadyW;
+        if (steadyW < rollW)
+            rollW = steadyW;
+        /* A vertical roll between rooms offset sideways: run it no wider
+         * than the span both rooms share, so neither shows void beside it. */
+        if (!(rc->scroll_direction & 1)) {
+            s32 l = sWsRoll.ox > rc->origin_x ? sWsRoll.ox : rc->origin_x;
+            s32 r0 = sWsRoll.ox + sWsRoll.w, r1 = rc->origin_x + (s32)rc->width;
+            s32 shared = (r0 < r1 ? r0 : r1) - l;
+            if (shared >= 240 && shared < rollW)
+                rollW = shared & ~1;
         }
+        sWsRoll.fromW = from;
+        sWsRoll.rollW = rollW;
+        sWsRoll.toW = steadyW;
+        rc->scroll_x = (s16)(rc->scroll_x + (from - rollW) / 2);
+        sWsRoll.view = rollW;
         Port_WidescreenRollClamp(rc, 1);
+        sWsRoll.sx = rc->scroll_x;
+        sWsRoll.sy = rc->scroll_y;
+        /* The first frame still shows the starting width; RollStep eases it. */
+        rc->scroll_x = (s16)(rc->scroll_x + rollW / 2 - from / 2);
+        sWsRoll.view = from;
+        Port_WidescreenRollClamp(rc, 0);
+        return;
     }
     sWsRoll.sx = rc->scroll_x;
     sWsRoll.sy = rc->scroll_y;
+}
+
+/* Width at roll frame k of `frames`: eases from the starting width to the
+ * roll width over the first frames, and on to the destination's steady
+ * width over the last ones, so the pillarbox never pops. Pure, for tests. */
+int Port_Widescreen_RollWidthAt(int fromW, int rollW, int toW, int k, int frames) {
+    int w = rollW;
+    if (k < kWsRollEase)
+        w = fromW + (rollW - fromW) * k / kWsRollEase;
+    else if (k > frames - kWsRollEase)
+        w = rollW + (toW - rollW) * (k - (frames - kWsRollEase)) / kWsRollEase;
+    return w & ~1;
+}
+
+/* Widest view a vertical roll can show at its current rows without void:
+ * the columns shared by every room those rows cross. 0 for horizontal rolls
+ * or when the rooms share fewer than 240 columns (void either way). */
+static int Port_WidescreenRollFitWidth(const RoomControls* rc) {
+    const s32 rooms[2][4] = {
+        { sWsRoll.ox, sWsRoll.oy, sWsRoll.w, sWsRoll.h },
+        { rc->origin_x, rc->origin_y, (s32)rc->width, (s32)rc->height },
+    };
+    s32 l = -0x8000, r = 0x7fff;
+    if (rc->scroll_direction & 1)
+        return 0;
+    for (int i = 0; i < 2; i++) {
+        if (rooms[i][1] >= rc->scroll_y + 160 || rooms[i][1] + rooms[i][3] <= rc->scroll_y)
+            continue;
+        if (rooms[i][0] > l)
+            l = rooms[i][0];
+        if (rooms[i][0] + rooms[i][2] < r)
+            r = rooms[i][0] + rooms[i][2];
+    }
+    return r - l >= 240 ? (int)((r - l) & ~1) : 0;
 }
 
 /* Scroll2Sub2, after the engine's per-frame move. Interpolates the camera
@@ -1406,7 +1474,7 @@ void Port_Widescreen_RollStep(void) {
         ex = hi;
     if (ex < lo)
         ex = lo;
-    ex -= (sWsRoll.view - steadyW) / 2;
+    ex -= (sWsRoll.rollW - steadyW) / 2;
     /* sub_080809D4's vertical rest, verbatim. */
     if (fy <= rc->origin_y + 80) {
         ey = rc->origin_y;
@@ -1416,6 +1484,18 @@ void Port_Widescreen_RollStep(void) {
     }
     rc->scroll_x = (s16)(sWsRoll.sx + (ex - sWsRoll.sx) * k / frames);
     rc->scroll_y = (s16)(sWsRoll.sy + (ey - sWsRoll.sy) * k / frames);
+    sWsRoll.view = sWsRoll.rollW;
+    Port_WidescreenRollClamp(rc, 0);
+    {
+        /* Same view centre at the eased width, never wider than the rooms
+         * on screen share (easing must not show void the roll avoids). */
+        const int fit = Port_WidescreenRollFitWidth(rc);
+        int w = Port_Widescreen_RollWidthAt(sWsRoll.fromW, sWsRoll.rollW, sWsRoll.toW, k, frames);
+        if (fit && w > fit)
+            w = fit;
+        rc->scroll_x = (s16)(rc->scroll_x + sWsRoll.rollW / 2 - w / 2);
+        sWsRoll.view = w;
+    }
     Port_WidescreenRollClamp(rc, 0);
 }
 
@@ -1423,6 +1503,10 @@ void Port_Widescreen_RollStep(void) {
  * the camera even when the destination settles native. */
 int Port_Widescreen_RollEnd(void) {
     int wasWide = sWsRoll.active && sWsRoll.wide;
+    if (wasWide) {
+        sWsRoll.tailFrom = sWsRoll.view;
+        sWsRoll.tailK = 1;
+    }
     sWsRoll.endCx = gRoomControls.scroll_x + sWsRoll.view / 2;
     sWsRoll.endY = gRoomControls.scroll_y;
     sWsRoll.active = 0;
@@ -1692,6 +1776,8 @@ static int Port_WidescreenHoldBlankFrame(void) {
 
 /* Called per-VBlank from src/interrupts.c::UpdateDisplayControls. */
 void Port_Widescreen_UpdateShadows(void) {
+    if (sWsRoll.tailK > 0 && ++sWsRoll.tailK > kWsRollEase)
+        sWsRoll.tailK = 0;
     port_ws_window_latch(gScreen.controls.window0HorizontalDimensions, gScreen.controls.window1HorizontalDimensions);
     if (Port_WidescreenHoldBlankFrame())
         return;

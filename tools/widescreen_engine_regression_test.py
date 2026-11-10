@@ -39,6 +39,8 @@ def main():
         'void Port_Widescreen_RollBegin(void)',
         'static void Port_WidescreenRollClamp(',
         'void Port_Widescreen_RollStart(void)',
+        'int Port_Widescreen_RollWidthAt(',
+        'static int Port_WidescreenRollFitWidth(',
         'void Port_Widescreen_RollStep(void)',
         'int Port_Widescreen_RollEnd(void)',
         'void Port_Widescreen_RollHandoff(void)',
