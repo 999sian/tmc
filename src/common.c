@@ -1183,11 +1183,16 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
     u8* base = ((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler;
     uVar5 = uVar7 = param_2;
     puVar6 = gUnk_02018EE0;
+    /* Widescreen: a centre past x=240 overflows the 8-bit edges; record the
+     * full span so the PPU can draw the circle across the wide frame. */
+    port_ws_window_table_begin(base);
 
     while (count-- > 0) {
+        s32 wideRight;
         uVar1 = *puVar6++;
         iVar2 = param_1 - uVar1;
         iVar4 = param_1 + uVar1;
+        wideRight = iVar4;
         if (iVar2 < 0) {
             iVar2 = 0;
         }
@@ -1197,10 +1202,12 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
         if (((u16)uVar5 & 0xffff) < 0xa0) {
             base[uVar5 * 2] = iVar4;
             base[uVar5 * 2 + 1] = iVar2;
+            port_ws_window_table_set(base, (int)(u16)uVar5, iVar2, wideRight);
         }
         if (((u16)uVar7 & 0xffff) < 0xa0) {
             base[uVar7 * 2] = iVar4;
             base[uVar7 * 2 + 1] = iVar2;
+            port_ws_window_table_set(base, (int)(u16)uVar7, iVar2, wideRight);
         }
         uVar5--;
         uVar7++;

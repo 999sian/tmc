@@ -20,6 +20,7 @@
 #include "vram.h"
 #include "pauseMenu.h"
 #include "asm.h"
+#include "port_hdma.h"
 
 static const u16 gUnk_081085B8[] = { 0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009,
                                      0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009 };
@@ -521,6 +522,10 @@ void sub_0805A94C(TempleOfDropletsManager* this) {
     gScreen.bg3.yOffset = gRoomControls.scroll_y - this->unk_26 + this->unk_36;
     tmp1 = -gScreen.bg3.xOffset;
     tmp2 = tmp1 + 0x100;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    port_ws_window_static(1, (u16)((min(max(0, tmp1), DISPLAY_WIDTH) << 8) | min(max(0, tmp2), DISPLAY_WIDTH)), tmp1,
+                          tmp2);
+#endif
     if (tmp1 < 0)
         tmp1 = 0;
     if (tmp1 > DISPLAY_WIDTH)
@@ -549,6 +554,10 @@ void sub_0805A9CC(TempleOfDropletsManager* this) {
     gScreen.bg3.xOffset = gRoomControls.scroll_x - this->unk_24 + this->unk_34;
     tmp1 = -gScreen.bg3.xOffset;
     tmp2 = tmp1 + 0x100;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    port_ws_window_static(1, (u16)((min(max(0, tmp1), DISPLAY_WIDTH) << 8) | min(max(0, tmp2), DISPLAY_WIDTH)), tmp1,
+                          tmp2);
+#endif
     if (tmp1 < 0)
         tmp1 = 0;
     if (tmp1 > DISPLAY_WIDTH)

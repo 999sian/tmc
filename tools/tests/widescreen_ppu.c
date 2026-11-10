@@ -33,6 +33,36 @@ int main(void) {
     io[1] |= 0x20; /* WIN0 enabled, zero window/outside controls. */
     virtuappu_mode1_render_frame(&p);
     expect("window masks sprite", virtuappu_frame_buffer[16 * MODE1_GBA_WIDTH + 240], 0xff00f800);
+    /* WINxH X2 >= 240 means the screen edge, which is the wide frame's edge. */
+    io[0x40] = 0xf0; io[0x41] = 0; /* WIN0 x 0..240 */
+    io[0x44] = 160; io[0x45] = 0;  /* WIN0 y 0..160 */
+    io[0x48] = 0x10;               /* OBJ inside WIN0 */
+    virtuappu_mode1_render_frame(&p);
+    expect("full-width window reaches frame edge", virtuappu_frame_buffer[16 * MODE1_GBA_WIDTH + 240], 0xff0000f8);
+    /* Side channel: full edges published in unused I/O replace the 8-bit
+     * WIN0H on wide frames. A circle centred past x=240 truncates its left
+     * edge byte (310 -> 0x36); the published edges keep x=300 outside. */
+    p.frame_width = 384;
+    oam[1] = 300;
+    io[0x40] = 0xf0; io[0x41] = 310 & 0xff;
+    virtuappu_mode1_render_frame(&p);
+    expect("truncated window edge without side channel", virtuappu_frame_buffer[16 * MODE1_GBA_WIDTH + 300], 0xff0000f8);
+    io[0x56] = 310 & 0xff; io[0x57] = 310 >> 8; /* WIN0 left */
+    io[0x58] = 340 & 0xff; io[0x59] = 340 >> 8; /* WIN0 right */
+    io[0x5e] = 1;
+    virtuappu_mode1_render_frame(&p);
+    expect("wide window left edge", virtuappu_frame_buffer[16 * MODE1_GBA_WIDTH + 300], 0xff00f800);
+    oam[1] = 330;
+    virtuappu_mode1_render_frame(&p);
+    expect("wide window interior", virtuappu_frame_buffer[16 * MODE1_GBA_WIDTH + 330], 0xff0000f8);
+    p.frame_width = 240;
+    oam[1] = 236;
+    virtuappu_mode1_render_frame(&p);
+    expect("native frame ignores side channel", virtuappu_frame_buffer[16 * MODE1_GBA_WIDTH + 236], 0xff0000f8);
+    p.frame_width = 284;
+    memset(io + 0x40, 0, 0x20);
+    io[1] &= (uint8_t)~0x20;
+    oam[1] = 236;
     /* Native fallback must not touch padding in the wider-pitch buffer. */
     p.frame_width = 240;
     for (int i = 0; i < MODE1_GBA_WIDTH * 160; i++) virtuappu_frame_buffer[i] = 0x12345678;

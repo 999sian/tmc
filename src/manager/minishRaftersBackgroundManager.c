@@ -9,6 +9,7 @@
 #include "room.h"
 #include "game.h"
 #include "vram.h"
+#include "port_widescreen.h"
 
 void MinishRaftersBackgroundManager_OnEnterRoom(MinishRaftersBackgroundManager*);
 void sub_08058210(MinishRaftersBackgroundManager*);
@@ -75,6 +76,9 @@ void sub_080582A0(u32 unk, u32* unk2, u16* unk3) {
     }
 #endif
     unk2 += unk >> 4;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    Port_Widescreen_BgWindowSource(unk3, unk2, gUnk_02006F00 + 0x4000);
+#endif
     for (; i != 0; i--) {
         DmaCopy16(3, unk2, unk3, 0x20 * 2);
         unk2 += 0x40;

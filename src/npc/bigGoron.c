@@ -20,6 +20,8 @@
 #include "map.h"
 #ifdef PC_PORT
 #include "rando/rando_keymap.h"
+#include "port_hdma.h"
+#include "port_widescreen.h"
 extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
@@ -146,9 +148,15 @@ static void sub_0806D02C(Entity* this) {
 
     tmp1 = -(s16)gScreen.bg1.xOffset;
     tmp2 = tmp1 + 0x100;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    const s32 wideLeft = tmp1, wideRight = tmp2;
+#endif
     tmp1 = min(max(0, tmp1), DISPLAY_WIDTH);
     tmp2 = min(max(0, tmp2), DISPLAY_WIDTH);
     gScreen.controls.window1HorizontalDimensions = (tmp1 << 8) | tmp2;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    port_ws_window_static(1, gScreen.controls.window1HorizontalDimensions, wideLeft, wideRight);
+#endif
 
     tmp1 = -(s16)gScreen.bg1.yOffset;
     tmp2 = tmp1 + 0x100;
@@ -247,6 +255,9 @@ void sub_0806D164(Entity* this) {
             gScreen.bg1.updated = 1;
             return;
         }
+#endif
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        Port_Widescreen_BgWindowSource(puVar2, &puVar1[startOff], gUnk_02006F00 + 0x4000);
 #endif
         for (index = 0x20, ptr = &puVar1[startOff]; index != 0; index--) {
             DmaCopy16(3, ptr, puVar2, 0x20 * 2);

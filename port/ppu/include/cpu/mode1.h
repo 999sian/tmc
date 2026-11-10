@@ -123,7 +123,14 @@ enum {
     MODE1_IO_MOSAIC = 0x4C,
     MODE1_IO_BLDCNT = 0x50,
     MODE1_IO_BLDALPHA = 0x52,
-    MODE1_IO_BLDY = 0x54
+    MODE1_IO_BLDY = 0x54,
+    /* Widescreen side channel in unused I/O (see port/port_hdma.h): full
+     * window edges for frames wider than 240, valid per flags bit. */
+    MODE1_IO_WS_WIN0_L = 0x56,
+    MODE1_IO_WS_WIN0_R = 0x58,
+    MODE1_IO_WS_WIN1_L = 0x5A,
+    MODE1_IO_WS_WIN1_R = 0x5C,
+    MODE1_IO_WS_WIN_FLAGS = 0x5E
 };
 
 enum {

@@ -11,6 +11,7 @@
 #include "player.h"
 #include "screen.h"
 #include "fade.h"
+#include "port_hdma.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -93,6 +94,9 @@ void sub_0809B97C(LightRayEntity* this, u32 param_2) {
     tmp2 = super->x.HALF.HI - gRoomControls.scroll_x;
     tmp1 = tmp2 - param_2;
     tmp2 += param_2;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    const s32 wideLeft = tmp1, wideRight = tmp2;
+#endif
     if (tmp1 < 0) {
         tmp1 = 0;
     }
@@ -106,6 +110,9 @@ void sub_0809B97C(LightRayEntity* this, u32 param_2) {
         tmp2 = DISPLAY_WIDTH;
     }
     gScreen.controls.window0HorizontalDimensions = (tmp1 << 8) | tmp2;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    port_ws_window_static(0, gScreen.controls.window0HorizontalDimensions, wideLeft, wideRight);
+#endif
 }
 
 void LightRay_Type1(LightRayEntity* this) {

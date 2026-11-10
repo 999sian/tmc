@@ -8,6 +8,7 @@
 #include "asm.h"
 #include "flags.h"
 #include "room.h"
+#include "port_hdma.h"
 #include "physics.h"
 #include "screen.h"
 #include "tiles.h"
@@ -75,6 +76,10 @@ void LightDoor_Action2(LightDoorEntity* this) {
         tmp = gRoomControls.scroll_x;
         tmp2 = tmp2 - tmp;
         gScreen.controls.window0HorizontalDimensions = (((tmp2 - 0x18) & 0xff) << 8) | ((tmp2 + 0x18) & 0xff);
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        /* A door past x=240 wraps the 8-bit edges; record the full span. */
+        port_ws_window_static(0, gScreen.controls.window0HorizontalDimensions, (s32)tmp2 - 0x18, (s32)tmp2 + 0x18);
+#endif
         tmp2 = super->y.HALF.HI;
         tmp = gRoomControls.scroll_y;
         tmp2 = tmp2 - tmp;
