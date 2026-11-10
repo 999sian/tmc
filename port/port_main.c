@@ -952,6 +952,13 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
+#ifdef TMC_REPRO_HARNESS
+    {
+        extern void Port_ReproAudio_RunIfRequested(void);
+        if (noAudio)
+            Port_ReproAudio_RunIfRequested();
+    }
+#endif
     if (noAudio) {
         gMain.muteAudio = 1;
         fprintf(stderr, "Audio disabled by --no-audio flag.\n");

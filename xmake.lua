@@ -782,6 +782,7 @@ target("tmc_pc")
         add_files("port/port_repro_roll_macro.c") -- roll-attack macro e2e test (TMC_REPRO_ROLL_MACRO)
         add_files("port/port_repro_npc_talk.c") -- NPC-talk e2e test (TMC_REPRO_NPC_TALK)
         add_files("port/port_repro_itemget.c") -- item-get perf repro (TMC_REPRO_ITEMGET)
+        add_files("port/port_repro_audio.c") -- offline audio audit (TMC_AUDIO_AUDIT)
     end
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
