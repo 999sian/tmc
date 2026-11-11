@@ -9,7 +9,9 @@
 #include "room.h"
 #include "game.h"
 #include "vram.h"
+#ifdef PC_PORT
 #include "port_widescreen.h"
+#endif
 
 void MinishRaftersBackgroundManager_OnEnterRoom(MinishRaftersBackgroundManager*);
 void sub_08058210(MinishRaftersBackgroundManager*);

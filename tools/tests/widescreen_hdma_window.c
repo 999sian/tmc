@@ -65,6 +65,24 @@ int main(void) {
     port_ws_window_latch(0x36f0, 0);
     port_ws_window_frame_begin();
     CHECK(io16(0x5e) == 0);
+    /* DEST_INC one-unit: only the transfer that lands on WIN0H publishes;
+     * later lines write past it and must not reuse the entry's wide edges. */
+    port_ws_window_table_begin(table[0]);
+    put(table[0], 0, 280, 320);
+    port_ws_window_table_set(table[0], 0, 280, 320);
+    put(table[0], 1, 280, 320);
+    port_ws_window_table_set(table[0], 1, 280, 320);
+    port_hdma_register(0, table[0], &gIoMem[0x40], 0x0000, 1); /* 16-bit, dest inc */
+    port_ws_window_frame_begin();
+    port_hdma_step_line(0);
+    CHECK((io16(0x5e) & 1) == 1);
+    port_ws_window_frame_begin();
+    port_hdma_step_line(1); /* rewound after the line-0 seed: lands on WIN0H */
+    CHECK((io16(0x5e) & 1) == 1);
+    port_ws_window_frame_begin();
+    port_hdma_step_line(2); /* lands on WIN1H (0x42): window 1, not 0 */
+    CHECK(io16(0x5e) == 2);
+    port_hdma_unregister(0);
     if (!failures) puts("widescreen HDMA window: PASS");
     return failures != 0;
 }

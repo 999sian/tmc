@@ -8,7 +8,9 @@
 #include "asm.h"
 #include "flags.h"
 #include "room.h"
+#ifdef PC_PORT
 #include "port_hdma.h"
+#endif
 #include "physics.h"
 #include "screen.h"
 #include "tiles.h"

@@ -20,7 +20,9 @@
 #include "vram.h"
 #include "pauseMenu.h"
 #include "asm.h"
+#ifdef PC_PORT
 #include "port_hdma.h"
+#endif
 
 static const u16 gUnk_081085B8[] = { 0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009,
                                      0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009 };

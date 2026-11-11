@@ -166,7 +166,13 @@ int main(void) {
     static u16 image[32 * 128], window[32 * 32];
     for (int i = 0; i < 32 * 128; ++i) image[i] = (u16)(0x100 + i);
     const int start = 6;
+    /* As the managers do: register, then copy the 32x32 window. */
+#define COPY_WINDOW(from)                                                            \
+    for (int at = 0; at < 32 * 32; ++at)                                             \
+        window[at] = (from) + (at / 32) * 128 + at % 32 < image + 32 * 128           \
+                         ? (from)[(at / 32) * 128 + at % 32] : 0
     Port_Widescreen_BgWindowSource(window, image + start, image + 32 * 128);
+    COPY_WINDOW(image + start);
     gScreen.bg1.subTileMap = window;
     gScreen.bg1.control = 0x1d47;
     gScreen.bg3.control = 0;
@@ -183,9 +189,19 @@ int main(void) {
                 CHECK(sWsShadowSource[1][row * MODE1_WS_SHADOW_COLS + col] == image[row * 128 + start + 30 + col]);
     }
     Port_Widescreen_BgWindowSource(window, image + 32 * 128 - 40, image + 32 * 128);
+    COPY_WINDOW(image + 32 * 128 - 40);
     Port_Widescreen_UpdateShadows();
     CHECK(sWsShadowSource[1][9] == image[32 * 128 - 1]);
     CHECK(sWsShadowSource[1][10] == 0);
+#undef COPY_WINDOW
+    /* Another BG reusing the same buffer: the record no longer describes
+     * it, so no source shadow, even once the old contents return. */
+    window[0] ^= 1;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] != sWsShadowSource[1]);
+    window[0] ^= 1;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] != sWsShadowSource[1]);
     /* Another subTileMap (a plain map BG swapped in) gets no source shadow. */
     gScreen.bg1.subTileMap = image;
     Port_Widescreen_UpdateShadows();
@@ -379,10 +395,18 @@ int main(void) {
         int prev = Port_Widescreen_EffectiveViewWidth();
         CHECK(prev > 272 && prev < 290);
         CHECK(gRoomControls.scroll_x + prev / 2 == 384 + 272 / 2);
+        /* A map BG on screen, so the frame width latches. */
+        gScreen.bg3.control = 0x1c03;
+        gScreen.lcd.displayControl = DISPCNT_BG3_ON;
+        gMapBottom.bgSettings = &overlayMap;
         for (int k = 0; k < 12; ++k) {
             Port_Widescreen_UpdateShadows();
+            /* The frame presents the width its camera was laid out for. */
+            CHECK(Port_Widescreen_LatchedFrameWidth() == prev);
             const int w = Port_Widescreen_EffectiveViewWidth();
             CHECK(w >= prev && w - prev <= 12);
+            CHECK(gRoomControls.scroll_x >= gRoomControls.origin_x &&
+                  gRoomControls.scroll_x + w <= gRoomControls.origin_x + (int)gRoomControls.width);
             prev = w;
         }
         CHECK(prev == 384);
@@ -490,6 +514,15 @@ int main(void) {
     }
     gRoomControls.scrollAction = 0;
     Port_Widescreen_RollEnd();
+    Port_Widescreen_RollHandoff();
+    /* Widening back to 384 at the room's right edge (x=1280): each wider
+     * view keeps the camera inside the room. */
+    for (int k = 0; k < 12; ++k) {
+        Port_Widescreen_UpdateShadows();
+        const int w = Port_Widescreen_EffectiveViewWidth();
+        CHECK(gRoomControls.scroll_x >= gRoomControls.origin_x &&
+              gRoomControls.scroll_x + w <= gRoomControls.origin_x + (int)gRoomControls.width);
+    }
 
     if (!errors) puts("widescreen engine: shake continuity, iris width/camera, live message window, frame latch, two-room rolling, mismatched-room rolls passed");
     return errors != 0;

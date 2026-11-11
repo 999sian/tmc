@@ -134,11 +134,12 @@ void port_ws_window_frame_begin(void) {
 }
 
 /* Publish (or withdraw) the full edges for the WINxH value just written. */
-static void ws_window_on_write(const HdmaChannel* c, const uint8_t* unit_src) {
+/* `dest` is where this transfer wrote; DEST_INC advances past WINxH. */
+static void ws_window_on_write(const HdmaChannel* c, const uint8_t* dest, const uint8_t* unit_src) {
     int win;
-    if (c->dest_orig == &gIoMem[0x40]) {
+    if (dest == &gIoMem[0x40]) {
         win = 0;
-    } else if (c->dest_orig == &gIoMem[0x42]) {
+    } else if (dest == &gIoMem[0x42]) {
         win = 1;
     } else {
         return;
@@ -247,6 +248,7 @@ void port_hdma_step_line(int line) {
             continue;
         }
         d = c->dest;
+        const uint8_t* first_dest = d;
         const uint8_t* first_src = c->src;
         for (i = 0; i < c->count; ++i) {
             memcpy(d, c->src, c->unit);
@@ -262,7 +264,7 @@ void port_hdma_step_line(int line) {
          * advanced pointer; FIXED stayed put anyway. */
         c->dest = (c->dest_mode == DEST_RELOAD) ? c->dest_orig : d;
         if (c->unit == 2 && c->count == 1) {
-            ws_window_on_write(c, first_src);
+            ws_window_on_write(c, first_dest, first_src);
         }
         if (line == 0) {
             c->src = c->src_orig;

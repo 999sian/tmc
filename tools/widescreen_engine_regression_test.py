@@ -56,6 +56,8 @@ def main():
     )]
     functions.append(function(message, 'bool Message_GetWindowRect('))
     functions.append(function(stubs, 'static int Port_WidescreenHoldBlankFrame(void)'))
+    functions.append(function(stubs, 'static void Port_WidescreenAdvanceTail(void)'))
+    functions.append(function(stubs, 'static void Port_WidescreenUpdateShadowsFrame(void)'))
     functions.append(function(stubs, 'void Port_Widescreen_UpdateShadows(void)'))
     with tempfile.TemporaryDirectory(prefix='tmc-ws-engine-') as directory:
         generated = Path(directory) / 'widescreen_helpers.h'

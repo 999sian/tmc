@@ -10,7 +10,9 @@
 #include "game.h"
 #include "vram.h"
 #include "room.h"
+#ifdef PC_PORT
 #include "port_widescreen.h"
+#endif
 
 void sub_08057F20(HorizontalMinishPathBackgroundManager*);
 void HorizontalMinishPathBackgroundManager_OnEnterRoom(HorizontalMinishPathBackgroundManager*);

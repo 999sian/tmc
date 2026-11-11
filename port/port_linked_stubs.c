@@ -1753,6 +1753,19 @@ static int Port_WidescreenShadow_PopulateSource(int bg, const void* subTileMap) 
     for (int i = 0; i < WS_BG_SOURCE_SLOTS; ++i) {
         if (sWsBgSource[i].dest == NULL || sWsBgSource[i].dest != subTileMap)
             continue;
+        /* The buffer may since hold another BG (a later overlay reusing
+         * gBG3Buffer): only a destination still holding the registered
+         * 32x32 copy continues its image; otherwise drop the record. */
+        const u16* dst = (const u16*)sWsBgSource[i].dest;
+        int held = 1;
+        for (int at = 0; held && at < 32 * 32; ++at) {
+            const u16* from = sWsBgSource[i].src + (at / 32) * WS_BG_SOURCE_STRIDE + at % 32;
+            held = from >= sWsBgSource[i].end || dst[at] == *from;
+        }
+        if (!held) {
+            sWsBgSource[i].dest = NULL;
+            continue;
+        }
         u16* shadow = sWsShadowSource[bg];
         for (int row = 0; row < MODE1_WS_SHADOW_ROWS; ++row) {
             const u16* line = sWsBgSource[i].src + row * WS_BG_SOURCE_STRIDE + (MODE1_GBA_BG_CLIP_X / 8);
@@ -1797,10 +1810,29 @@ static int Port_WidescreenHoldBlankFrame(void) {
     return gRoomControls.width == 0 || gFadeControl.active || (gScreen.lcd.displayControl & DISPCNT_FORCED_BLANK);
 }
 
-/* Called per-VBlank from src/interrupts.c::UpdateDisplayControls. */
-void Port_Widescreen_UpdateShadows(void) {
-    if (sWsRoll.tailK > 0 && ++sWsRoll.tailK > kWsRollEase)
+/* After the frame latched the width its camera was laid out for: step the
+ * post-roll tail, and keep the camera inside the room at the wider view so
+ * the next frame's BG offsets and tiles never reach past its edge (Scroll1
+ * only corrects by scrollSpeed per frame). */
+static void Port_WidescreenAdvanceTail(void) {
+    RoomControls* rc = &gRoomControls;
+    if (sWsRoll.tailK <= 0)
+        return;
+    if (++sWsRoll.tailK > kWsRollEase)
         sWsRoll.tailK = 0;
+    const s32 view = Port_Widescreen_EffectiveViewWidth();
+    s32 x = rc->scroll_x;
+    if (x > rc->origin_x + (s32)rc->width - view)
+        x = rc->origin_x + (s32)rc->width - view;
+    if (x < rc->origin_x)
+        x = rc->origin_x;
+    if (x != rc->scroll_x) {
+        rc->scroll_x = (s16)x;
+        gUpdateVisibleTiles = 1;
+    }
+}
+
+static void Port_WidescreenUpdateShadowsFrame(void) {
     port_ws_window_latch(gScreen.controls.window0HorizontalDimensions, gScreen.controls.window1HorizontalDimensions);
     if (Port_WidescreenHoldBlankFrame())
         return;
@@ -1898,6 +1930,12 @@ void Port_Widescreen_UpdateShadows(void) {
     if (Port_Widescreen_ShadowsLive()) {
         sWsLatchedFrameWidth = Port_Widescreen_EffectiveViewWidth();
     }
+}
+
+/* Called per-VBlank from src/interrupts.c::UpdateDisplayControls. */
+void Port_Widescreen_UpdateShadows(void) {
+    Port_WidescreenUpdateShadowsFrame();
+    Port_WidescreenAdvanceTail();
 }
 #else
 void Port_Widescreen_UpdateShadows(void) { /* no-op at native 240 */

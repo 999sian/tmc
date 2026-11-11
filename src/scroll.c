@@ -18,7 +18,9 @@
 #include "screen.h"
 #include "tileMap.h"
 #include "tiles.h"
+#ifdef PC_PORT
 #include "port_hdma.h"
+#endif
 
 #ifdef PC_PORT
 #include "port/port_generic_entity.h"

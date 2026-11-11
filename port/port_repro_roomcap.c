@@ -49,6 +49,24 @@ static int RoomCap_Capture(const char* path) {
     return Port_CaptureBaseFramebufferPNG(path) ? 1 : -1;
 }
 /* Parse before narrowing to the warp API's byte/halfword fields. */
+/* Resume index from env `name`: unset -> 0; otherwise 0..count or exit. */
+static int RoomCap_StartIndex(const char* name, int count) {
+    const char* st = getenv(name);
+    if (!st || !*st)
+        return 0;
+    char* end;
+    errno = 0;
+    long start = strtol(st, &end, 10);
+    int parsed = end != st;
+    while (isspace((unsigned char)*end))
+        ++end;
+    if (!parsed || *end || errno || start < 0 || start > count) {
+        fprintf(stderr, "[roomcap] invalid %s %s (expected 0..%d)\n", name, st, count);
+        _Exit(2);
+    }
+    return (int)start;
+}
+
 static int RoomCap_ParseTourRow(const char* line, unsigned int values[5]) {
     int count = 0;
     while (1) {
@@ -272,7 +290,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         static int au = -1, nj = 0, ji = 0, st = 0;
         static AuJob jobs[8192];
         static unsigned int fired = 0, since = 0, mark = 0;
-        static int lsx, lsy, stable, rwid, rlast, rstep, rfail_rev, rfail_w, vmax, vcols, lastcap, forced;
+        static int lsx, lsy, stable, rwid, rlast, rstep, rfail_rev, rfail_w, vmax, vcols, lastcap, forced, jump;
         static int pcx, pcy, pcw, ax, ay;
         static int S[4], D[4];
         if (au < 0) {
@@ -349,8 +367,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                         }
                     }
                 }
-                const char* s0 = getenv("TMC_ROOMCAP_AUDIT_START");
-                ji = s0 && *s0 ? atoi(s0) : 0;
+                ji = RoomCap_StartIndex("TMC_ROOMCAP_AUDIT_START", nj);
                 au = tour_running = 1;
                 fprintf(stderr, "[audit] %d jobs, from %d\n", nj, ji);
             }
@@ -411,7 +428,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             (void)ax, (void)ay;
             switch (st) {
                 case 0:
-                    vmax = vcols = rfail_rev = rfail_w = rstep = 0, rwid = -1, lastcap = -100, ax = ay = -1;
+                    vmax = vcols = rfail_rev = rfail_w = rstep = jump = 0, rwid = -1, lastcap = -100, ax = ay = -1;
                     memset(S, 0, sizeof S), memset(D, 0, sizeof D);
                     if (gRoomControls.area == j->area && gRoomControls.room == j->room && calm &&
                         gRoomControls.camera_target == &gPlayerEntity.base) {
@@ -518,11 +535,13 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     }
                     break;
                 case 5: {
+                    const int pos = (j->dir & 1) ? sx + Port_Widescreen_EffectiveViewWidth() / 2 : sy;
                     if (gRoomControls.scrollAction != 2) {
+                        /* the handover frame: compare with the last roll frame */
+                        jump = pos - rlast;
                         st = 6, mark = frame;
                         break;
                     }
-                    const int pos = (j->dir & 1) ? sx + Port_Widescreen_EffectiveViewWidth() / 2 : sy;
                     if (gRoomControls.unk_18 >= 1) {
                         /* widths ease now: flag only a pop (>16px in a frame) */
                         if (rwid >= 0 && abs(vw - rwid) > 16)
@@ -568,13 +587,6 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     break;
                 }
                 case 6: {
-                    if (frame == mark + 0) {
-                        /* nothing: first follow frame is checked below */
-                    }
-                    const int pos = (j->dir & 1) ? sx + Port_Widescreen_EffectiveViewWidth() / 2 : sy;
-                    static int jump;
-                    if (frame == mark)
-                        jump = pos - rlast;
                     if (frame - mark >= 40) {
                         AU_CAP("post");
                         AU_NEXT(abs(jump) > rstep + 1 ? "jump" : "ok", jump);
@@ -635,8 +647,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                         if (gAreaRoomHeaders[a][r].tileSet_id != 0xFFFF)
                             rooms[nr++] = (unsigned short)(a << 8 | r);
                 }
-                const char* s0 = getenv("TMC_ROOMCAP_DOORS_START");
-                ri = s0 && *s0 ? atoi(s0) : 0;
+                ri = RoomCap_StartIndex("TMC_ROOMCAP_DOORS_START", nr);
                 dm = tour_running = 1;
                 fprintf(stderr, "[door] %d rooms, from %d\n", nr, ri);
             }
@@ -814,20 +825,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     fprintf(stderr, "[roomcap] empty or unreadable tour plan %s\n", plan);
                     _Exit(2);
                 }
-                const char* st = getenv("TMC_ROOMCAP_TOUR_START");
-                if (st && *st) {
-                    char* end;
-                    errno = 0;
-                    long start = strtol(st, &end, 10);
-                    int parsed = end != st;
-                    while (isspace((unsigned char)*end))
-                        ++end;
-                    if (!parsed || *end || errno || start < 0 || start > tn) {
-                        fprintf(stderr, "[roomcap] invalid tour start %s (expected 0..%d)\n", st, tn);
-                        _Exit(2);
-                    }
-                    ti = (int)start;
-                }
+                ti = RoomCap_StartIndex("TMC_ROOMCAP_TOUR_START", tn);
                 tour = tour_running = 1;
                 fprintf(stderr, "[roomcap] tour: %d views, from %d\n", tn, ti);
             }

@@ -11,7 +11,9 @@
 #include "player.h"
 #include "screen.h"
 #include "fade.h"
+#ifdef PC_PORT
 #include "port_hdma.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
