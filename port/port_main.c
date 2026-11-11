@@ -553,6 +553,10 @@ int main(int argc, char* argv[]) {
      * menu" instead of duplicating the check at every call site. Only set
      * it when true — never unset an env var the user's shell may have
      * exported for their own reasons. */
+    /* Captured before skip_launcher sets TMC_AUTOPLAY below: only an
+     * externally set TMC_AUTOPLAY means nobody is there to answer the ROM
+     * picker. A skip_launcher user is still at the keyboard. */
+    const bool externalAutoplay = getenv("TMC_AUTOPLAY") != NULL;
     if (skipLauncher || Port_Config_GetSkipLauncher()) {
 #if defined(_WIN32)
         extern int _putenv_s(const char*, const char*);
@@ -928,9 +932,9 @@ int main(int argc, char* argv[]) {
         }
         Port_Rom_SetRecoverable(0);
 
-        /* A headless run (TMC_AUTOPLAY) has nobody to answer the picker,
+        /* A headless run (TMC_AUTOPLAY from the environment) has nobody to answer the picker,
          * so waiting for input would hang until an external timeout. */
-        if (getenv("TMC_AUTOPLAY")) {
+        if (externalAutoplay) {
             fprintf(stderr, "ERROR: %s\nTMC_AUTOPLAY set — exiting instead of opening the picker.\n",
                     Port_Rom_LastErrorMessage());
             exit(1);
