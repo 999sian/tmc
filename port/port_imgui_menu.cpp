@@ -1617,8 +1617,8 @@ static void CenteredText(const char* t) {
     ImGui::TextUnformatted(t);
 }
 
-extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version, const char* rom_name, bool* out_play,
-                                           bool* out_change_rom) {
+extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, bool rom_failed, const char* version,
+                                           const char* rom_name, bool* out_play, bool* out_change_rom) {
     if (out_play)
         *out_play = false;
     if (out_change_rom)
@@ -1706,6 +1706,12 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
                         *out_change_rom = true;
                 }
             }
+            if (rom_failed) {
+                ImGui::Dummy(ImVec2(0, 6));
+                ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+                CenteredText("This ROM did not load. Select a different file to continue.");
+                ImGui::PopStyleColor();
+            }
         } else {
             /* First-launch / missing-ROM state: dominate the card with a
              * "Select your Minish Cap ROM" prompt + big button. No Play
@@ -1737,9 +1743,10 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
         ImGui::Dummy(ImVec2(0, 22));
 
         /* Big centred action button: Play when a ROM is loaded, Select
-         * ROM when none. Enter / Space activates whichever is shown. */
+         * ROM when none or when the one on file failed to load. Enter /
+         * Space activates whichever is shown. */
+        const bool is_select = !rom_present || rom_failed;
         {
-            const bool is_select = !rom_present;
             const char* lbl = is_select ? "Select ROM..." : "Play";
             const ImVec2 sz(is_select ? 260.0f : 220.0f, 48.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
@@ -1766,8 +1773,7 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version
 
         ImGui::Dummy(ImVec2(0, 6));
         ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
-        CenteredText(rom_present ? "Press Enter or click Play to start"
-                                 : "Press Enter or click to pick your .gba file");
+        CenteredText(is_select ? "Press Enter or click to pick your .gba file" : "Press Enter or click Play to start");
         ImGui::PopStyleColor();
     }
     ImGui::End();

@@ -117,9 +117,53 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
  * Safe to call before SDL_CreateWindow — SDL_ShowSimpleMessageBox
  * accepts a NULL parent. Exported (declared in port_rom.h) so the
  * region cross-check in port_main.c can reuse it. */
+/* Recovery point for ROM-file failures — see port_rom.h. Inactive by
+ * default, so every existing Port_FatalRomError call site keeps its
+ * exit-on-failure behaviour unless a caller opts in. */
+static jmp_buf sRomRecoveryPoint;
+static int sRomRecoverable = 0;
+static char sRomErrorTitle[256];
+static char sRomErrorMessage[1024];
+
+jmp_buf* Port_Rom_RecoveryPoint(void) {
+    return &sRomRecoveryPoint;
+}
+
+void Port_Rom_SetRecoverable(int on) {
+    sRomRecoverable = on;
+}
+
+const char* Port_Rom_LastErrorTitle(void) {
+    return sRomErrorTitle[0] ? sRomErrorTitle : "Minish Cap PC Port - ROM error";
+}
+
+const char* Port_Rom_LastErrorMessage(void) {
+    return sRomErrorMessage[0] ? sRomErrorMessage : "The ROM could not be loaded.";
+}
+
+void Port_Rom_ResetForRetry(void) {
+    if (gRomData) {
+        free(gRomData);
+        gRomData = NULL;
+    }
+    gRomSize = 0;
+    sLoadedRomPath[0] = '\0';
+    /* sExtractedPages is cleared by Port_LoadRom on entry. */
+}
+
 void Port_FatalRomError(const char* title, const char* message) {
     fprintf(stderr, "ERROR: %s\n", message);
     fflush(stderr);
+
+    /* Recoverable: hand the message to the caller and unwind instead of
+     * killing the process. The caller owns the message box, so it can
+     * word the prompt around the ROM picker it is about to show. */
+    if (sRomRecoverable) {
+        snprintf(sRomErrorTitle, sizeof(sRomErrorTitle), "%s", title ? title : "");
+        snprintf(sRomErrorMessage, sizeof(sRomErrorMessage), "%s", message ? message : "");
+        sRomRecoverable = 0;
+        longjmp(sRomRecoveryPoint, 1);
+    }
 #ifndef TMC_N64
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
     SDL_Quit();
@@ -1313,26 +1357,31 @@ void Port_LoadRom(const char* path) {
         char usedPath[4096] = { 0 };
         FILE* f = NULL;
 
-        /* TMC_BASEROM overrides the probe list entirely (headless/CI and
+        /* The caller's path wins: it is either Port_FindBaseRomPath's
+         * answer (which already honours TMC_BASEROM) or a file the user
+         * just picked to replace one that failed to load. Letting the
+         * override or the region order win here would reload the bad
+         * file on every retry. */
+        if (path && path[0]) {
+            /* Opened as given: both sources are already resolved paths, so
+             * TryOpenRom's exe-dir pass could only swap in a different file. */
+            f = fopen(path, "rb");
+            if (f)
+                snprintf(usedPath, sizeof(usedPath), "%s", path);
+        }
+
+        /* TMC_BASEROM overrides the probe list (headless/CI and
          * multi-region verification, or a ROM kept outside the default
-         * locations). Checked BEFORE TryOpenRom because TryOpenRom's
-         * exe-dir prefix pass would otherwise match a bundled baserom.gba
-         * ahead of an absolute override path. */
+         * locations). Checked BEFORE the candidate list because
+         * TryOpenRom's exe-dir prefix pass would otherwise match a bundled
+         * baserom.gba ahead of an absolute override path. */
         const char* romOverride = getenv("TMC_BASEROM");
-        if (romOverride && romOverride[0]) {
+        if (!f && romOverride && romOverride[0]) {
             f = fopen(romOverride, "rb");
             if (f)
                 snprintf(usedPath, sizeof(usedPath), "%s", romOverride);
             else
                 fprintf(stderr, "TMC_BASEROM='%s' not openable; using probe list.\n", romOverride);
-        }
-
-        if (!f) {
-            /* Try caller-supplied path first */
-            if (path && path[0]) {
-                const char* singlePath[1] = { path };
-                f = TryOpenRom(singlePath, 1, usedPath, (int)sizeof(usedPath));
-            }
         }
         if (!f) {
             /* Try preferred region next */
@@ -1368,6 +1417,9 @@ void Port_LoadRom(const char* path) {
                              "Failed to allocate %u bytes for ROM.\n\n"
                              "The system is out of memory.",
                              gRomSize);
+                    /* Out of memory is not something a different ROM
+                     * file can fix, so this one always exits. */
+                    Port_Rom_SetRecoverable(0);
                     Port_FatalRomError("Minish Cap PC Port - ROM allocation failed", msg);
                 }
             }

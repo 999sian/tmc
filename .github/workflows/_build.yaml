@@ -368,6 +368,13 @@ jobs:
           cc -I port -O2 -o /tmp/rng_golden_test port/port_rng_golden_test.c
           /tmp/rng_golden_test
 
+      - name: ROM zip extraction test (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        run: |
+          cc -I port -O2 port/port_rom_zip.c port/port_rom_zip_test.c -lz -o /tmp/rom_zip_test
+          /tmp/rom_zip_test
+
       - name: PPU affine-latch unit test (Linux)
         if: matrix.os_name == 'linux'
         shell: bash
