@@ -1457,6 +1457,19 @@ void ScriptCommand_SetEntityVelocity(Entity* entity, ScriptExecutionContext* con
 }
 
 void ScriptCommand_SetEntityPositionRelative(Entity* entity, ScriptExecutionContext* context) {
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    {
+        /* Festival intro, Zelda's third stop: she walks east off a 240 view,
+         * then the script snaps her 32 px down-right. A wide view still
+         * shows her, so she walks to the spot instead. */
+        extern int Port_Widescreen_IsActive(void);
+        if (entity->kind == NPC && entity->id == ZELDA && context->scriptInstructionPointer[1] == 0x118 &&
+            context->scriptInstructionPointer[2] == 0x1c8 && Port_Widescreen_IsActive() && CheckOnScreen(entity)) {
+            ScriptCommand_MoveTo(entity, context);
+            return;
+        }
+    }
+#endif
     entity->x.HALF.HI = gRoomControls.origin_x + context->scriptInstructionPointer[1];
     entity->y.HALF.HI = gRoomControls.origin_y + context->scriptInstructionPointer[2];
 }
