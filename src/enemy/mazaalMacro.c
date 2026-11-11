@@ -15,6 +15,9 @@
 #include "physics.h"
 #include "asm.h"
 #include "port_scripts.h"
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -237,7 +240,13 @@ void sub_08034EE4(MazaalMacroEntity* this) {
         randomValue = Random();
         entity = CreateFx(super, gUnk_080CEEC8[randomValue & 3], 0);
         if (entity != NULL) {
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+            /* Spread over the live view width; identical at 240. */
+            entity->x.HALF.HI = (((randomValue >> 2) & 0x77) << 1) * Port_Widescreen_EffectiveViewWidth() / 240 + 1 +
+                                gRoomControls.scroll_x;
+#else
             entity->x.HALF.HI = (((randomValue >> 2) & 0x77) << 1) + 1 + gRoomControls.scroll_x;
+#endif
             entity->y.HALF.HI = ((randomValue >> 9) & 0x7e) + 1 + gRoomControls.scroll_y;
             entity->collisionLayer = 2;
             UpdateSpriteForCollisionLayer(entity);
