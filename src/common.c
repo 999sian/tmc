@@ -1308,6 +1308,12 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
     MemClear(((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler, 0xa00);
     ptr1 = (u32*)gUnk_02018EE0;
     ptr2 = ((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler;
+#ifdef PC_PORT
+    /* Widescreen: edges past x=240 overflow the 8-bit entries; pack them
+     * clamped (240 reads as the frame's right edge) and record the full
+     * span for the PPU, like the iris. */
+    port_ws_window_table_begin(ptr2);
+#endif
     for (y1 = 0xa0; y1 > 0; y1--, ptr2 += 2) {
         x1 = ptr1[0];
         x2 = ptr1[1];
@@ -1322,6 +1328,26 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
         if (x2 > x3) {
             SWAP(x2, x3, y2);
         }
+#ifdef PC_PORT
+        {
+            s32 l = -1, r = -1;
+            if (x1 != 0xffffffff) {
+                l = x1;
+                r = x3;
+            } else if (x2 != x1) {
+                l = x2;
+                r = x3;
+            } else if (x3 != x1) {
+                l = r = x1;
+            }
+            if (r >= 0) {
+                ptr2[0] = (u8)min(r, 240);
+                ptr2[1] = (u8)min(l, 240);
+                port_ws_window_table_set(((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler,
+                                         0xa0 - y1, l, r);
+            }
+        }
+#else
         if (x1 != 0xffffffff) {
             ptr2[0] = x3;
             ptr2[1] = x1;
@@ -1336,6 +1362,7 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
                 }
             }
         }
+#endif
     }
     SetVBlankDMA((u16*)((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler, (u16*)REG_ADDR_WIN0H,
                  ((DMA_ENABLE | DMA_START_HBLANK | DMA_16BIT | DMA_REPEAT | DMA_SRC_INC | DMA_DEST_RELOAD) << 16) +
@@ -1344,7 +1371,14 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
 
 void sub_0801E64C(s32 x1, s32 y1, s32 x2, s32 y2, s32 offset) {
     // GBA Resolutions
+#ifdef PC_PORT
+    /* Widescreen: clamp to the wide view; sub_0801E49C records the full
+     * edges for the PPU and packs the 8-bit ones as before. */
+    extern int Port_Widescreen_EffectiveViewWidth(void);
+    const s32 MAX_X_COORD = max(240, Port_Widescreen_EffectiveViewWidth());
+#else
     const s32 MAX_X_COORD = 240;
+#endif
     const s32 MAX_Y_COORD = 160;
 
     s32 slope, preciseX, tmp;
