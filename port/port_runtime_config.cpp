@@ -52,6 +52,21 @@ static_assert(!AxisPastThreshold(-20000, 1, kAxisThreshold), "positive half igno
 static_assert(AxisPastThreshold(20000, 1, kAxisThreshold), "positive half fires on a positive push");
 static_assert(!AxisPastThreshold(-10000, -1, kAxisThreshold), "a push inside the dead zone does not fire");
 
+/* Which half of an axis a value sits in: -1, +1, or 0 inside the dead zone. */
+constexpr Sint8 AxisZone(int value) {
+    return AxisPastThreshold(value, -1, kAxisThreshold) ? -1 : AxisPastThreshold(value, 1, kAxisThreshold) ? 1 : 0;
+}
+/* The half an axis just entered, or 0. Only a move into a new half is a
+ * press: an axis easing back from full tilt to just past the threshold
+ * stays in its half and must not read as a fresh press. */
+constexpr Sint8 AxisEntered(Sint8 prevZone, int value) {
+    return AxisZone(value) != prevZone ? AxisZone(value) : 0;
+}
+static_assert(AxisEntered(0, -20000) == -1, "pushing left from rest is a press");
+static_assert(AxisEntered(-1, -20000) == 0, "easing back from full left is not a press");
+static_assert(AxisEntered(-1, 20000) == 1, "flicking straight across to the other half is a press");
+static_assert(AxisEntered(1, 0) == 0, "returning to rest is not a press");
+
 struct Def {
     PortInput input;
     const char* name;
@@ -238,6 +253,11 @@ int sCapturingInput = -1;
  * (multiple bindings per action); false = replace. Set by BeginAddBinding /
  * BeginCaptureBinding respectively. */
 bool sCaptureAppend = false;
+/* Last half each axis sat in, and the half the current event's axis just
+ * entered (0 if none). Fed once per event by Port_Config_TrackAxisEvent.
+ * chisle: keyed by axis only; key by gamepad id too if two pads fight. */
+Sint8 sAxisZone[SDL_GAMEPAD_AXIS_COUNT] = {};
+Sint8 sAxisEnteredDir = 0;
 /* Edge-detection cache. Set when the corresponding SDL key/button event
  * arrives during the frame; cleared by Port_Config_ClearInputEdges()
  * after KEYINPUT is committed. Catches sub-frame taps (press+release
@@ -1409,10 +1429,9 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
             newBind.pad = (SDL_GamepadButton)e->gbutton.button;
             captured = true;
-        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-                   (e->gaxis.value > kAxisThreshold || e->gaxis.value < -kAxisThreshold)) {
+        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && sAxisEnteredDir != 0) {
             newBind.axis = (SDL_GamepadAxis)e->gaxis.axis;
-            newBind.axisDir = e->gaxis.value < 0 ? -1 : 1;
+            newBind.axisDir = sAxisEnteredDir;
             captured = true;
         }
         if (captured) {
@@ -1540,6 +1559,14 @@ extern "C" bool Port_Config_InputEdgePressed(PortInput input) {
  * while game KEYINPUT is masked (e.g. closing the file-select setup
  * sidebar with its open button). Key repeats are ignored so a held key
  * fires once. */
+extern "C" void Port_Config_TrackAxisEvent(const SDL_Event* e) {
+    sAxisEnteredDir = 0;
+    if (e->type != SDL_EVENT_GAMEPAD_AXIS_MOTION || e->gaxis.axis >= SDL_GAMEPAD_AXIS_COUNT)
+        return;
+    sAxisEnteredDir = AxisEntered(sAxisZone[e->gaxis.axis], e->gaxis.value);
+    sAxisZone[e->gaxis.axis] = AxisZone(e->gaxis.value);
+}
+
 extern "C" bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input) {
     if (input < 0 || input >= PORT_INPUT_COUNT) {
         return false;
@@ -1556,11 +1583,10 @@ extern "C" bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input
                 return true;
             }
         }
-    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-               (e->gaxis.value > kAxisThreshold || e->gaxis.value < -kAxisThreshold)) {
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && sAxisEnteredDir != 0) {
         for (const Bind& b : sBinds[input]) {
             if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis &&
-                AxisPastThreshold(e->gaxis.value, b.axisDir, kAxisThreshold)) {
+                b.axisDir == sAxisEnteredDir) {
                 return true;
             }
         }

@@ -310,6 +310,9 @@ void Port_Config_SetRaToken(const char* v);
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64
 void Port_Config_HandleEvent(const SDL_Event* e);
+/* Call once per polled event, before any handler: records which half each
+ * stick/trigger sits in so axis presses fire only on a fresh crossing. */
+void Port_Config_TrackAxisEvent(const SDL_Event* e);
 /* True when an SDL event is a fresh press bound to `input` (see .cpp). */
 bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input);
 #endif
