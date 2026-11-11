@@ -16,6 +16,9 @@
 #include "manager/staticBackgroundManager.h"
 #include "player.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_widescreen.h"
+#endif
 
 void WeatherChangeManager_OnEnterRoom(WeatherChangeManager*);
 void sub_08059608(WeatherChangeManager*);
@@ -150,6 +153,12 @@ void sub_080596E0(WeatherChangeManager* this) {
                 break;
         }
     }
+#ifdef PC_PORT
+    /* Rain (states 0-3, blank at 4) is a 256 px BG1 texture, not the map
+     * top: wrap it across the wide columns like the GBA would. */
+    if (gMapTop.bgSettings == NULL)
+        Port_Widescreen_WrapBg(1);
+#endif
 }
 
 u32 sub_08059844(void) {

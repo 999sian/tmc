@@ -1716,14 +1716,21 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, const 
  * Copy its complete screenblock so even HBlank-varying scroll offsets use
  * the same tiles on both sides of x=240. Existing CPU/GPU shadow sampling
  * retains the overlay's scroll, wave distortion, priority and alpha blend. */
-static void Port_WidescreenShadow_PopulateOverlay(const u16* screen, u16* shadow) {
+static void Port_WidescreenShadow_PopulateOverlay(int bg, const u16* screen, u16* shadow) {
     for (int row = 0; row < MODE1_WS_SHADOW_ROWS; ++row) {
         for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col) {
             shadow[row * MODE1_WS_SHADOW_COLS + col] = screen[row * 32 + (col & 31)];
         }
     }
-    virtuappu_mode1_ws_shadow_base_tile[3] = 0;
-    virtuappu_mode1_ws_shadow[3] = shadow;
+    virtuappu_mode1_ws_shadow_base_tile[bg] = 0;
+    virtuappu_mode1_ws_shadow[bg] = shadow;
+}
+
+static u32 sWsWrapBgMask;
+
+void Port_Widescreen_WrapBg(int bg) {
+    if (bg == 1 || bg == 2)
+        sWsWrapBgMask |= 1u << bg;
 }
 
 #define WS_BG_SOURCE_SLOTS 3
@@ -1834,6 +1841,8 @@ static void Port_WidescreenAdvanceTail(void) {
 
 static void Port_WidescreenUpdateShadowsFrame(void) {
     port_ws_window_latch(gScreen.controls.window0HorizontalDimensions, gScreen.controls.window1HorizontalDimensions);
+    const u32 wrapBgMask = sWsWrapBgMask;
+    sWsWrapBgMask = 0;
     if (Port_WidescreenHoldBlankFrame())
         return;
     for (int i = 0; i < MODE1_GBA_BG_COUNT; i++)
@@ -1924,7 +1933,18 @@ static void Port_WidescreenUpdateShadowsFrame(void) {
     if (Port_Widescreen_ShadowsLive() && virtuappu_mode1_ws_shadow[3] == NULL &&
         (gScreen.lcd.displayControl & DISPCNT_BG3_ON) && (gScreen.bg3.control & 0xc000u) == 0) {
         const u32 sb = ((u32)gScreen.bg3.control >> 8) & 0x1fu;
-        Port_WidescreenShadow_PopulateOverlay((const u16*)(gVram + sb * 0x800u), sWsShadowOverlay);
+        Port_WidescreenShadow_PopulateOverlay(3, (const u16*)(gVram + sb * 0x800u), sWsShadowOverlay);
+    }
+    /* Opted-in BG1/BG2 textures wrap the same way (see WrapBg). */
+    if (Port_Widescreen_ShadowsLive()) {
+        const u32 controls[MODE1_GBA_BG_COUNT] = { 0, gScreen.bg1.control, gScreen.bg2.control, 0 };
+        for (int bg = 1; bg <= 2; ++bg) {
+            if ((wrapBgMask & (1u << bg)) && virtuappu_mode1_ws_shadow[bg] == NULL &&
+                (gScreen.lcd.displayControl & (DISPCNT_BG0_ON << bg)) && (controls[bg] & 0xc000u) == 0) {
+                const u32 sb = (controls[bg] >> 8) & 0x1fu;
+                Port_WidescreenShadow_PopulateOverlay(bg, (const u16*)(gVram + sb * 0x800u), sWsShadowSource[bg]);
+            }
+        }
     }
     /* Overlay screens swap the map BGs out (no shadow) and present native. */
     if (Port_Widescreen_ShadowsLive()) {
@@ -1977,6 +1997,9 @@ void Port_Widescreen_BgWindowSource(const void* dest, const void* src, const voi
     (void)dest;
     (void)src;
     (void)end;
+}
+void Port_Widescreen_WrapBg(int bg) {
+    (void)bg;
 }
 void Port_Widescreen_SetWindowPixels(int w, int h) {
     (void)w;

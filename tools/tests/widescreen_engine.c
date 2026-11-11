@@ -122,7 +122,7 @@ int main(void) {
     /* Overlay is a complete wrapping screenblock, independent of camera. */
     static u16 screen[32 * 32];
     for (int i = 0; i < 32 * 32; ++i) screen[i] = (u16)(i + 7);
-    Port_WidescreenShadow_PopulateOverlay(screen, shadow);
+    Port_WidescreenShadow_PopulateOverlay(3, screen, shadow);
     CHECK(virtuappu_mode1_ws_shadow[3] == shadow);
     CHECK(virtuappu_mode1_ws_shadow_base_tile[3] == 0);
     for (int row = 0; row < 32; ++row)
@@ -161,6 +161,26 @@ int main(void) {
         if (!overlays[i].map)
             CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
     }
+    /* A BG1 texture (Mount Crenel rain) wraps only for the frame it opts in. */
+    gRoomControls.area = AREA_HYRULE_FIELD;
+    gScreen.bg3.control = 0x1e05;
+    gMapBottom.bgSettings = &overlayMap;
+    gScreen.bg1.control = 0x1d01;
+    gScreen.bg2.control = 0x1c00; /* the live map, so shadows are on */
+    gScreen.lcd.displayControl = (DISPCNT_BG0_ON << 1) | (DISPCNT_BG0_ON << 2);
+    enabled = 1;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] == NULL);
+    Port_Widescreen_WrapBg(1);
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] != NULL);
+    CHECK(virtuappu_mode1_ws_shadow_base_tile[1] == 0);
+    if (virtuappu_mode1_ws_shadow[1])
+        CHECK(memcmp(virtuappu_mode1_ws_shadow[1], screen, sizeof(screen)) == 0);
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] == NULL);
+    gScreen.bg1.control = 0x1c00;
+    gScreen.bg2.control = 0;
     /* A parallax BG copied out of a wider image continues that image from
      * tile column 30 of the copied window; past the buffer end it is empty. */
     static u16 image[32 * 128], window[32 * 32];

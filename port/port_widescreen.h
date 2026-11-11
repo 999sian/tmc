@@ -127,6 +127,12 @@ void Port_Widescreen_RescanRoomContent(void);
  * bounds the source buffer. */
 void Port_Widescreen_BgWindowSource(const void* dest, const void* src, const void* end);
 
+/* A BG1/BG2 texture that tiles like hardware wrap (rainy Mount Crenel's rain
+ * on BG1). Call each frame it is shown: the next shadow update repeats its
+ * 256 px screenblock across the wide columns. Opt-in, because BG-drawn
+ * bosses (Mazaal) on a 256 px BG would show a second copy. */
+void Port_Widescreen_WrapBg(int bg);
+
 #ifdef __cplusplus
 }
 #endif
