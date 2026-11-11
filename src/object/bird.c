@@ -23,6 +23,9 @@
 #include "port_scripts.h"
 #ifdef PC_PORT
 #include "rando/rando_keymap.h"
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#endif
 extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
@@ -346,7 +349,12 @@ void Bird_Type9(BirdEntity* this) {
             child->spriteOrientation.flipY = super->spriteOrientation.flipY;
         }
         PausePlayer();
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        /* Drop Link at the live view's centre, where he stands. */
+        if (gRoomControls.scroll_x + Port_Widescreen_EffectiveViewWidth() / 2 < super->x.HALF.HI) {
+#else
         if (gRoomControls.scroll_x + 0x78 < super->x.HALF.HI) {
+#endif
             super->action++;
             super->spritePriority.b1 = 1;
             if (child != NULL) {
