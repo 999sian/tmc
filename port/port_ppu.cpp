@@ -158,10 +158,46 @@ extern "C" int Port_PPU_VisibleFrameWidth(void) {
     /* Width latched at the vblank that produced this frame's tilemap, OAM and
      * shadows. A live check here ran one tick ahead of the content whenever
      * the mode flipped, showing one frame cropped or offset. */
-    if (gMain[2] == 2 /* TASK_GAME */) {
+    /* TASK_GAMEOVER too: its first state still shows the room. The latch
+     * drops to 240 by itself once the display is cleared. */
+    if (gMain[2] == 2 /* TASK_GAME */ || gMain[2] == 3 /* TASK_GAMEOVER */) {
         return Port_Widescreen_LatchedFrameWidth();
     }
     return 240;
+}
+
+/* The Game Over screen is a 240 canvas that fades in from white and out
+ * to black. Bars in the chosen fill colour framed the fade; when the
+ * frame's left and right columns are one flat colour, the bars take it
+ * instead, so the fade fills the screen as it does in the room. */
+static bool sEdgeFill = false;
+static uint8_t sEdgeFillRgb[3];
+
+static void Port_PPU_UpdateEdgeFill(const uint32_t* px, int w, int h, int pitchBytes) {
+    sEdgeFill = false;
+    if (!px || w <= 0 || w >= MODE1_GBA_WIDTH || gMain[2] != 3 /* TASK_GAMEOVER */)
+        return;
+    const int pitch = pitchBytes / (int)sizeof(uint32_t);
+    const uint32_t c = px[0] & 0x00FFFFFFu;
+    for (int y = 0; y < h; y++) {
+        const uint32_t* row = px + (size_t)y * (size_t)pitch;
+        if ((row[0] & 0x00FFFFFFu) != c || (row[w - 1] & 0x00FFFFFFu) != c)
+            return;
+    }
+    /* ABGR8888: red in the low byte. */
+    sEdgeFillRgb[0] = (uint8_t)c;
+    sEdgeFillRgb[1] = (uint8_t)(c >> 8);
+    sEdgeFillRgb[2] = (uint8_t)(c >> 16);
+    sEdgeFill = true;
+}
+
+extern "C" int Port_PPU_EdgeFill(uint8_t* r, uint8_t* g, uint8_t* b) {
+    if (!sEdgeFill)
+        return 0;
+    *r = sEdgeFillRgb[0];
+    *g = sEdgeFillRgb[1];
+    *b = sEdgeFillRgb[2];
+    return 1;
 }
 
 /* xBRZ scratch buffers are sized to the frame we are actually presenting:
@@ -1539,6 +1575,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
     int presentH = 0;
     int presentPitchBytes = 0;
     const uint32_t* presentFrame = Port_PPU_SelectPresentFrame(&presentW, &presentH, &presentPitchBytes);
+    Port_PPU_UpdateEdgeFill(presentFrame, presentW, presentH, presentPitchBytes);
 
     /* Stage 2: SDL_GPU present path. Stretched 240x160 → swapchain via
      * the passthrough shader. Internal-scale and xBRZ now route through
@@ -1689,7 +1726,11 @@ extern "C" void Port_PPU_PresentFrame(void) {
         SDL_RenderClear(sRenderer);
 
         const PortBgFill bgFill = Port_Config_BgFill();
-        if (bgFill == PORT_BG_FILL_SOLID_COLOR) {
+        u8 edgeR = 0, edgeG = 0, edgeB = 0;
+        if (Port_PPU_EdgeFill(&edgeR, &edgeG, &edgeB)) {
+            SDL_SetRenderDrawColor(sRenderer, edgeR, edgeG, edgeB, 255);
+            SDL_RenderFillRect(sRenderer, &stage);
+        } else if (bgFill == PORT_BG_FILL_SOLID_COLOR) {
             u8 bgR = 0, bgG = 0, bgB = 0;
             Port_Config_BgFillColor(&bgR, &bgG, &bgB);
             SDL_SetRenderDrawColor(sRenderer, bgR, bgG, bgB, 255);

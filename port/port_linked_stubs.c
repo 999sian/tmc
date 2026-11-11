@@ -1188,6 +1188,14 @@ int Port_Widescreen_FallbackNative(void) {
     return Port_WidescreenSteadyFallback();
 }
 
+/* The room is what the frame shows: gameplay, and the Game Over task's
+ * first state, which keeps the dead room on screen through its white fade
+ * before clearing the display (GameOver_Init). Dropping to 240 at that
+ * task switch cropped and shifted the fading room. */
+static int Port_WidescreenRoomShown(void) {
+    return gMain.task == TASK_GAME || (gMain.task == TASK_GAMEOVER && gMain.state == 0);
+}
+
 int Port_Widescreen_IsActive(void) {
     /* No message/controlMode gate here: snapping the viewport wide->240 for
      * every textbox (and back on close) was the single worst widescreen UX
@@ -1196,7 +1204,7 @@ int Port_Widescreen_IsActive(void) {
      * overlay screens that replace the map BGs (prologue storybook, pause
      * menu, ...) are caught by Port_Widescreen_ShadowsLive() instead: no
      * matching BG -> no shadow -> present native 240. */
-    return (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled() && !Port_Widescreen_FallbackNative()) ? 1 : 0;
+    return (Port_WidescreenRoomShown() && Port_Config_WidescreenEnabled() && !Port_Widescreen_FallbackNative()) ? 1 : 0;
 }
 
 int Port_Widescreen_EffectiveViewWidth(void) {
@@ -1223,7 +1231,7 @@ int Port_Widescreen_EffectiveViewWidth(void) {
 /* View width the current room settles at once no transition effect runs. */
 static int Port_WidescreenSteadyViewWidth(void) {
     s32 eff;
-    if (gMain.task != TASK_GAME || Port_WidescreenSteadyFallback()) {
+    if (!Port_WidescreenRoomShown() || Port_WidescreenSteadyFallback()) {
         return 240;
     }
     eff = Port_WidescreenEffectiveTarget();
@@ -1782,7 +1790,7 @@ static int Port_WidescreenPpuBgForControl(u32 control) {
  * stays: dropping to 240 there flashed pillarbox bars around the fade. */
 static int Port_WidescreenHoldBlankFrame(void) {
     const u32 mapBgs = DISPCNT_BG1_ON | DISPCNT_BG2_ON | DISPCNT_BG3_ON;
-    if (gMain.task != TASK_GAME || !Port_Config_WidescreenEnabled() || sWsLatchedFrameWidth <= 240)
+    if (!Port_WidescreenRoomShown() || !Port_Config_WidescreenEnabled() || sWsLatchedFrameWidth <= 240)
         return 0;
     if ((gScreen.lcd.displayControl & mapBgs) != 0)
         return 0;

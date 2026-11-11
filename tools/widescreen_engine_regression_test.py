@@ -28,6 +28,7 @@ def main():
     source_start = stubs.index('#define WS_BG_SOURCE_SLOTS')
     source_state = stubs[source_start:stubs.index('} sWsBgSource[', source_start) + len('} sWsBgSource[WS_BG_SOURCE_SLOTS];')]
     functions = [roll_state, source_state] + [function(stubs, name) for name in (
+        'static int Port_WidescreenRoomShown(void)',
         'static int Port_WidescreenSteadyFallback(void)',
         'int Port_Widescreen_FallbackNative(void)',
         'int Port_Widescreen_EffectiveViewWidth(void)',

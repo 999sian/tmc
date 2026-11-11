@@ -34,7 +34,7 @@ static u32 Port_WidescreenRoomKey(void) { return 1; }
 int Port_Widescreen_FallbackNative(void);
 /* Only unrelated task/HUD dependencies are stubbed; shadow publication runs
  * the production UpdateShadows body, including its area and BG gates. */
-enum { TASK_GAME = 2, AREA_MINISH_WOODS = 0x0b, AREA_HYRULE_FIELD = 0x0a,
+enum { TASK_GAME = 2, TASK_GAMEOVER = 3, AREA_MINISH_WOODS = 0x0b, AREA_HYRULE_FIELD = 0x0a,
        AREA_CAVE_OF_FLAMES = 0x60, MANAGER = 9, ENTER_ROOM_TEXTBOX_MANAGER = 1 };
 #define MODE1_GBA_BG_COUNT 4
 #define DISPCNT_BG0_ON 0x100
@@ -43,7 +43,7 @@ enum { TASK_GAME = 2, AREA_MINISH_WOODS = 0x0b, AREA_HYRULE_FIELD = 0x0a,
 #define DISPCNT_BG3_ON 0x800
 #define DISPCNT_FORCED_BLANK 0x80
 static struct { int active; } gFadeControl;
-static struct { int task; } gMain;
+static struct { int task; int state; } gMain;
 typedef struct { u32 control; int yOffset; void* subTileMap; } TestBg;
 static struct { TestBg bg0, bg1, bg2, bg3; struct { int displayControl; } lcd;
                 struct { u16 window0HorizontalDimensions, window1HorizontalDimensions; } controls; } gScreen;
