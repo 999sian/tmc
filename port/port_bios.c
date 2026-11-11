@@ -224,6 +224,7 @@ static void Port_UpdateInput(void) {
 static void Port_PumpEvents(void) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        Port_Config_TrackAxisEvent(&e);
         /* Forward every event to ImGui so its window/keyboard tracking
          * stays in sync. ImGui only consumes input when a widget is
          * actively hovered/focused; game input passes through. */
