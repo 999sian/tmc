@@ -1,6 +1,6 @@
 /*
  * port/port_rom_picker.c — SDL3 file-picker fallback for "no ROM
- * found." Lets the user point at any .gba file without having to
+ * found." Lets the user point at any .gba (or a .zip holding one) without having to
  * manually rename and place it. We validate the picked file is a
  * known Minish Cap ROM (SHA-1 + SHA-256), then install it as
  * baserom.gba — next to the executable on desktop, in the app data
@@ -15,6 +15,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "port_rom_picker.h"
+#include "port_rom_zip.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_dialog.h>
@@ -448,7 +449,7 @@ int Port_RomPicker_PromptAndInstall(void) {
     fprintf(stderr, "[rom-picker] opening SDL file dialog...\n");
 
     SDL_DialogFileFilter filters[] = {
-        { "Game Boy Advance ROM", "gba" },
+        { "Game Boy Advance ROM", "gba;zip" },
         { "All files", "*" },
     };
 
@@ -487,6 +488,27 @@ int Port_RomPicker_PromptAndInstall(void) {
         snprintf(msg, sizeof(msg), "Could not read the picked file:\n%s\n\n%s", sPickPath, SDL_GetError());
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Read failed", msg, NULL);
         return -1;
+    }
+
+    /* Accept the .zip a dump often ships in: swap in its first .gba. */
+    if (Port_RomZip_IsZip(romData, romLen)) {
+        size_t gbaLen = 0;
+        void* gba = Port_RomZip_ExtractGba(romData, romLen, 0x01010000, &gbaLen);
+        SDL_free(romData);
+        if (!gba) {
+            char msg[4608];
+            snprintf(msg, sizeof(msg), "Could not find a readable .gba file inside:\n%s", sPickPath);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Unsupported zip", msg, NULL);
+            return -1;
+        }
+        romData = SDL_malloc(gbaLen);
+        if (!romData) {
+            free(gba);
+            return -1;
+        }
+        memcpy(romData, gba, gbaLen);
+        free(gba);
+        romLen = gbaLen;
     }
 
     const char* region = ValidateRomBuffer(romData, romLen);
