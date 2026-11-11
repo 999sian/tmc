@@ -53,6 +53,7 @@ enum {
 
 static SDL_AtomicInt sPickStatus;
 static char sPickPath[4096];
+static char sInstalledPath[4096];
 
 static void SDLCALL RomPickerCallback(void* userdata, const char* const* filelist, int filter) {
     (void)userdata;
@@ -439,6 +440,10 @@ static int ResolveInstallPath(char* dst, size_t dst_len) {
  *
  * The prelaunch UI shows the user-facing "Pick your ROM" prompt
  * before calling this, so we skip straight to the file dialog. */
+const char* Port_RomPicker_InstalledPath(void) {
+    return sInstalledPath[0] ? sInstalledPath : NULL;
+}
+
 int Port_RomPicker_PromptAndInstall(void) {
     fprintf(stderr, "[rom-picker] opening SDL file dialog...\n");
 
@@ -528,5 +533,6 @@ int Port_RomPicker_PromptAndInstall(void) {
     }
 
     fprintf(stderr, "[rom-picker] installed %s ROM -> %s\n", region, dst);
+    snprintf(sInstalledPath, sizeof(sInstalledPath), "%s", dst);
     return 0;
 }

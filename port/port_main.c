@@ -749,9 +749,14 @@ int main(int argc, char* argv[]) {
      * menu to appear on the next pass even where we would normally skip
      * it, so a bad ROM always leaves the picker reachable. */
     volatile bool romLoadFailed = false;
+    /* A ROM the user picked after a failed load. It outranks TMC_BASEROM
+     * and the region candidate order, either of which could otherwise keep
+     * pointing at the file that just failed. */
+    static char pickedRomPath[4096];
+    pickedRomPath[0] = '\0';
 
     for (;;) {
-        romPath = Port_FindBaseRomPath();
+        romPath = pickedRomPath[0] ? pickedRomPath : Port_FindBaseRomPath();
         bool done = false;
 
 #ifdef __ANDROID__
@@ -781,7 +786,11 @@ int main(int argc, char* argv[]) {
             opts.priority = PORT_TTS_PRIO_URGENT;
             opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
             opts.dedupe = false;
-            if (romPath) {
+            if (romLoadFailed) {
+                Port_TTS_Speak("The ROM did not load. Press Enter or Space "
+                               "to select a different Minish Cap GBA ROM file.",
+                               &opts);
+            } else if (romPath) {
                 Port_TTS_Speak("Project Picori, the Minish Cap PC port. "
                                "ROM detected. Press Enter or Space to play.",
                                &opts);
@@ -800,7 +809,7 @@ int main(int argc, char* argv[]) {
         Uint64 nextPrelaunchFrameNs = SDL_GetTicksNS() + prelaunchFrameNs;
         while (!done) {
             /* Region dropdown changes preferred candidate order before Play. */
-            romPath = Port_FindBaseRomPath();
+            romPath = pickedRomPath[0] ? pickedRomPath : Port_FindBaseRomPath();
             /* Re-derive the displayable filename each iteration in case
              * a Change-ROM swap moved the file. */
             char rom_name_buf[1024];
@@ -821,10 +830,13 @@ int main(int argc, char* argv[]) {
             }
 
             const bool rom_present = (romPath != NULL);
+            /* After a failed load, Play would only reload the same bad file
+             * until the user picks a replacement. */
+            const bool rom_failed = romLoadFailed && !pickedRomPath[0];
             bool play_clicked = false;
             bool change_rom_clicked = false;
-            const bool imgui_built =
-                Port_ImGui_RenderPrelaunch(rom_present, TMC_PC_VERSION, rom_name, &play_clicked, &change_rom_clicked);
+            const bool imgui_built = Port_ImGui_RenderPrelaunch(rom_present, rom_failed, TMC_PC_VERSION, rom_name,
+                                                                &play_clicked, &change_rom_clicked);
 #ifdef TMC_GPU_RENDERER
             if (imgui_built) {
                 Port_GPU_PresentPrelaunchFrame();
@@ -835,7 +847,7 @@ int main(int argc, char* argv[]) {
             (void)imgui_built; /* SDL_Renderer path presents inline. */
 #endif
 
-            if (play_clicked && rom_present) {
+            if (play_clicked && rom_present && !rom_failed) {
                 fprintf(stderr, "Prelaunch: play_clicked.\n");
                 done = true;
             } else if (change_rom_clicked) {
@@ -843,7 +855,10 @@ int main(int argc, char* argv[]) {
                 int rc = Port_RomPicker_PromptAndInstall();
                 fprintf(stderr, "Prelaunch: picker returned %d.\n", rc);
                 if (rc == 0) {
-                    romPath = Port_FindBaseRomPath();
+                    if (romLoadFailed && Port_RomPicker_InstalledPath()) {
+                        snprintf(pickedRomPath, sizeof(pickedRomPath), "%s", Port_RomPicker_InstalledPath());
+                    }
+                    romPath = pickedRomPath[0] ? pickedRomPath : Port_FindBaseRomPath();
                     fprintf(stderr, "Prelaunch: post-picker romPath=%s.\n", romPath ? romPath : "(still NULL)");
                     /* Re-announce so the user hears the new state
                      * without having to look at the screen. */
@@ -913,6 +928,14 @@ int main(int argc, char* argv[]) {
         }
         Port_Rom_SetRecoverable(0);
 
+        /* A headless run (TMC_AUTOPLAY) has nobody to answer the picker,
+         * so waiting for input would hang until an external timeout. */
+        if (getenv("TMC_AUTOPLAY")) {
+            fprintf(stderr, "ERROR: %s\nTMC_AUTOPLAY set — exiting instead of opening the picker.\n",
+                    Port_Rom_LastErrorMessage());
+            exit(1);
+        }
+
         fprintf(stderr, "Prelaunch: ROM load failed — returning to the picker.\n");
         {
             char msg[1280];
@@ -921,6 +944,7 @@ int main(int argc, char* argv[]) {
         }
         Port_Rom_ResetForRetry();
         romLoadFailed = true;
+        pickedRomPath[0] = '\0';
     }
 
 #ifdef TMC_GPU_RENDERER

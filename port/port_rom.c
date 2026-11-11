@@ -1357,26 +1357,31 @@ void Port_LoadRom(const char* path) {
         char usedPath[4096] = { 0 };
         FILE* f = NULL;
 
-        /* TMC_BASEROM overrides the probe list entirely (headless/CI and
+        /* The caller's path wins: it is either Port_FindBaseRomPath's
+         * answer (which already honours TMC_BASEROM) or a file the user
+         * just picked to replace one that failed to load. Letting the
+         * override or the region order win here would reload the bad
+         * file on every retry. */
+        if (path && path[0]) {
+            /* Opened as given: both sources are already resolved paths, so
+             * TryOpenRom's exe-dir pass could only swap in a different file. */
+            f = fopen(path, "rb");
+            if (f)
+                snprintf(usedPath, sizeof(usedPath), "%s", path);
+        }
+
+        /* TMC_BASEROM overrides the probe list (headless/CI and
          * multi-region verification, or a ROM kept outside the default
-         * locations). Checked BEFORE TryOpenRom because TryOpenRom's
-         * exe-dir prefix pass would otherwise match a bundled baserom.gba
-         * ahead of an absolute override path. */
+         * locations). Checked BEFORE the candidate list because
+         * TryOpenRom's exe-dir prefix pass would otherwise match a bundled
+         * baserom.gba ahead of an absolute override path. */
         const char* romOverride = getenv("TMC_BASEROM");
-        if (romOverride && romOverride[0]) {
+        if (!f && romOverride && romOverride[0]) {
             f = fopen(romOverride, "rb");
             if (f)
                 snprintf(usedPath, sizeof(usedPath), "%s", romOverride);
             else
                 fprintf(stderr, "TMC_BASEROM='%s' not openable; using probe list.\n", romOverride);
-        }
-
-        if (!f) {
-            /* Try caller-supplied path first */
-            if (path && path[0]) {
-                const char* singlePath[1] = { path };
-                f = TryOpenRom(singlePath, 1, usedPath, (int)sizeof(usedPath));
-            }
         }
         if (!f) {
             /* Try preferred region next */

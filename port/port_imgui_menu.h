@@ -23,7 +23,10 @@ bool Port_ImGui_QuitConfirmed(void);
 void Port_ImGui_RequestQuitModal(void);
 
 bool Port_ImGui_Render(void);
+/* romFailed: the ROM on file failed to load, so the primary action
+ * becomes Select ROM instead of Play. */
 bool Port_ImGui_RenderPrelaunch(bool romPresent,
+                                bool romFailed,
                                 const char* version,
                                 const char* romName,
                                 bool* outPlay,

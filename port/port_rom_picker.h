@@ -9,6 +9,9 @@ extern "C" {
  * it next to the executable as baserom.gba. Returns 0 on success. */
 int Port_RomPicker_PromptAndInstall(void);
 
+/* Path the last successful pick was written to, or NULL if none yet. */
+const char* Port_RomPicker_InstalledPath(void);
+
 #ifdef __cplusplus
 }
 #endif
