@@ -88,7 +88,13 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
 #define DmaCopy16(dmaNum, src, dest, size) DMA_COPY(dmaNum, src, dest, size, 16)
 #define DmaCopy32(dmaNum, src, dest, size) DMA_COPY(dmaNum, src, dest, size, 32)
 
-#define DmaStop(dmaNum) ((void)0)
+/* HBlank DMA is the only DMA that outlives its call on the host. Stopping
+ * it here, not where a caller clears vBlankDMA.ready, keeps the GBA's
+ * timing: VBlankIntr stops channel 0 and re-arms it only while ready, so a
+ * teardown (iris end, DisableVBlankDMA) lands with the display registers
+ * at the same vblank. Stopping it early ran one frame with the window
+ * still on but its per-line edges gone, a black flash. */
+#define DmaStop(dmaNum) port_hdma_unregister(dmaNum)
 #define DmaWait(dmaNum) ((void)0)
 
 #define DMA_CLEAR(dmaNum, dest, size, bit)     \

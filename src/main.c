@@ -306,9 +306,6 @@ void SetVBlankDMA(u16* src, u16* dest, u32 size) {
 
 void DisableVBlankDMA(void) {
     gScreen.vBlankDMA.ready = FALSE;
-#ifdef PC_PORT
-    port_hdma_unregister(0);
-#endif
 }
 
 void SetSleepMode(void) {

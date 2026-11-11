@@ -749,9 +749,6 @@ void DispReset(bool32 refresh) {
     gScreen.vBlankDMA.ready = FALSE;
     DmaStop(0);
 #ifdef PC_PORT
-    /* DmaStop(0) is a host no-op; retail stops DMA0 here after the room-exit
-     * fade, so per-scanline affine HDMA must not leak into the next room. */
-    port_hdma_unregister(0);
     gba_write16(REG_ADDR_DISPCNT, 0);
 #else
     REG_DISPCNT = 0;
@@ -1095,18 +1092,6 @@ void MessageFromFusionTarget(u32 textIndex) {
 void sub_0801E104(void) {
     gScreen.lcd.displayControl &= ~0x6000;
     gScreen.vBlankDMA.ready = FALSE;
-#ifdef PC_PORT
-    /* #103 root cause: this sub only clears vBlankDMA.ready. On GBA that was
-       enough because VBlankIntr ran DmaStop(0) every frame, so the HBlank DMA
-       stopped re-arming the moment `ready` went FALSE. On PC DmaStop is a
-       no-op and the per-scanline HBlank channel keeps firing the stale src
-       table into its dest register until something calls DisableVBlankDMA —
-       corrupting the next scene's BG/window rendering. Tear the channel down
-       here exactly like DisableVBlankDMA does (main.c). This neutralizes the
-       whole class of sub_0801E104-only teardowns: lightManager (dark-room end),
-       whiteTriangleEffect (screen wipe), vaatiAppearingManager Evaporate. */
-    port_hdma_unregister(0);
-#endif
 }
 
 void sub_0801E120(void) {

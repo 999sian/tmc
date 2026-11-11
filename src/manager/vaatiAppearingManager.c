@@ -146,9 +146,7 @@ void VaatiAppearingManager_Action2(VaatiAppearingManager* this) {
 #ifdef PC_PORT
                 /* Evaporate path: mirror the Apparate (Action1) teardown — the
                    BG3HOFS per-HBlank DMA armed every frame by sub_0805DA08 must
-                   be unregistered or it keeps firing into the next scene (#103).
-                   (sub_0801E104 now also unregisters channel 0, so this is
-                   belt-and-suspenders matching Action1's explicit disable.) */
+                   be unregistered or it keeps firing into the next scene (#103). */
                 DisableVBlankDMA();
 #endif
                 DeleteThisEntity();
