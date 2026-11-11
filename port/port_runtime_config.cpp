@@ -368,6 +368,16 @@ const ScaleCfg kScaleCfg[] = {
     { "internal_scale", &sInternalScale, 1, 1, 10 },
 };
 
+/* Platform defaults shared by DefaultsJson() and the missing-key fallbacks in
+ * Port_Config_Load, so an older config.json without these keys still gets them. */
+#ifdef __ANDROID__
+constexpr const char* kDefaultBgFill = "black";
+constexpr const char* kDefaultRenderBackend = "software";
+#else
+constexpr const char* kDefaultBgFill = "blurred";
+constexpr const char* kDefaultRenderBackend = "auto";
+#endif
+
 nlohmann::json DefaultsJson(void) {
     nlohmann::json j;
     for (const auto& e : kScaleCfg)
@@ -385,17 +395,9 @@ nlohmann::json DefaultsJson(void) {
     j["autosave_interval_ms"] = 60000;
     j["touch_scheme"] = "joystick";
     j["aspect_mode"] = "native";
-#ifdef __ANDROID__
-    j["bg_fill"] = "black";
-#else
-    j["bg_fill"] = "blurred";
-#endif
+    j["bg_fill"] = kDefaultBgFill;
     j["bg_fill_color"] = { 0, 0, 0 };
-#ifdef __ANDROID__
-    j["render_backend"] = "software";
-#else
-    j["render_backend"] = "auto";
-#endif
+    j["render_backend"] = kDefaultRenderBackend;
     /* reborn_features is intentionally absent — its presence is the signal
      * to override the compile-time feature defaults. */
     j["bindings"] = nlohmann::json::object();
@@ -771,7 +773,7 @@ extern "C" void Port_Config_Load(const char* path) {
             else
                 sAspectMode = PORT_ASPECT_NATIVE_3_2;
 
-            std::string bf = JsonValue(j, "bg_fill", std::string("blurred"));
+            std::string bf = JsonValue(j, "bg_fill", std::string(kDefaultBgFill));
             for (char& c : bf) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
@@ -798,7 +800,7 @@ extern "C" void Port_Config_Load(const char* path) {
             }
         }
         {
-            std::string rb = JsonValue(j, "render_backend", std::string("auto"));
+            std::string rb = JsonValue(j, "render_backend", std::string(kDefaultRenderBackend));
             for (char& c : rb) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
