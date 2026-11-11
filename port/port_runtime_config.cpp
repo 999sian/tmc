@@ -78,15 +78,14 @@ u32 sAutosaveIntervalMs = 60000;
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 float sTouchScale = 1.0f;   /* multiplies the touch layout unit  */
 float sTouchOpacity = 1.0f; /* multiplies every control's alpha  */
-/* Widescreen reveal default-ON for desktop, OFF for Android. Widescreen
- * draws ~60% more scanline pixels (384x160 vs 240x160), which crushes
- * low-end ARM chips. Console-Parity still forces this off; native-240
- * builds ignore it. */
-#ifdef __ANDROID__
-bool sWidescreenEnabled = false;
-#else
+/* Widescreen reveal default-ON everywhere. It draws up to ~60% more
+ * scanline pixels (384x160 vs 240x160), which is why this was once off for
+ * Android — but the width tracks the window's aspect rather than always
+ * running the full 384 (Port_Widescreen_TargetViewWidth), so a 16:9 handheld
+ * pays ~18% rather than 60%. Anyone it does cost can turn it off in the
+ * F8 menu; native-240 builds ignore this flag entirely.
+ * Console-Parity still forces it off. */
 bool sWidescreenEnabled = true;
-#endif
 /* Console-Parity mode. When true the port suppresses every feature that
  * gives the player an edge over real GBA hardware, so a run is provably
  * console-equivalent: sub-frame input edge leniency off, save-states inert,
@@ -114,12 +113,24 @@ int sPreferredLanguage = -1;
  * blurred ambient fill so no scene shows dead black bars. "black" restores
  * the historical plain-bars look. */
 PortAspectMode sAspectMode = PORT_ASPECT_NATIVE_3_2;
+#ifdef __ANDROID__
+PortBgFill sBgFill = PORT_BG_FILL_BLACK; /* "blurred" reads as glitchy duplicated tiles on real widescreen panels */
+#else
 PortBgFill sBgFill = PORT_BG_FILL_BLURRED_FRAME;
+#endif
 u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
 /* Renderer backend selection — read once at PPU init; menu writes
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
+#ifdef __ANDROID__
+/* "Auto" picks the SDL_GPU/Vulkan backend on capable Adreno GPUs (e.g. AYN
+ * Thor), whose ImGui/swapchain path has an unresolved resize bug that leaves
+ * everything past the pre-fullscreen window width unpainted. Force the
+ * SDL_Renderer path until that's fixed upstream. */
+PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
+#else
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
+#endif
 bool sTtsEnabled = false;
 float sTtsRate = 0.5f;
 float sTtsPitch = 0.5f;
@@ -165,7 +176,11 @@ bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
 bool sHdDialogue = false;
 bool sMenuArtBackground = true;
 bool sRollAttackMacroEnabled = true;
+#ifdef __ANDROID__
+bool sFullscreen = true; /* no windowed mode on a handheld; avoid a visible nav bar */
+#else
 bool sFullscreen = false;
+#endif
 bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
 /* Persisted equivalent of TMC_AUTOPLAY: skip the prelaunch Play screen (and,
  * via the same env var, the update-check dialog) on every launch. --skip-launcher
@@ -270,11 +285,7 @@ struct ScaleCfg {
 const BoolCfg kBoolCfg[] = {
     { "port_settings_menu", &sPortSettingsMenuEnabled, true },
     { "autosave_enabled", &sAutosaveEnabled, true },
-#ifdef __ANDROID__
-    { "widescreen_enabled", &sWidescreenEnabled, false },
-#else
     { "widescreen_enabled", &sWidescreenEnabled, true },
-#endif
     { "console_parity", &sConsoleParity, false },
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
@@ -305,7 +316,11 @@ const BoolCfg kBoolCfg[] = {
     { "hd_dialogue", &sHdDialogue, false },
     { "menu_art_background", &sMenuArtBackground, true },
     { "roll_attack_macro", &sRollAttackMacroEnabled, true },
+#ifdef __ANDROID__
+    { "fullscreen", &sFullscreen, true },
+#else
     { "fullscreen", &sFullscreen, false },
+#endif
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
     { "skip_launcher", &sSkipLauncher, false },
     { "rando_enabled", &sRandoEnabled, false },
@@ -353,6 +368,16 @@ const ScaleCfg kScaleCfg[] = {
     { "internal_scale", &sInternalScale, 1, 1, 10 },
 };
 
+/* Platform defaults shared by DefaultsJson() and the missing-key fallbacks in
+ * Port_Config_Load, so an older config.json without these keys still gets them. */
+#ifdef __ANDROID__
+constexpr const char* kDefaultBgFill = "black";
+constexpr const char* kDefaultRenderBackend = "software";
+#else
+constexpr const char* kDefaultBgFill = "blurred";
+constexpr const char* kDefaultRenderBackend = "auto";
+#endif
+
 nlohmann::json DefaultsJson(void) {
     nlohmann::json j;
     for (const auto& e : kScaleCfg)
@@ -370,9 +395,9 @@ nlohmann::json DefaultsJson(void) {
     j["autosave_interval_ms"] = 60000;
     j["touch_scheme"] = "joystick";
     j["aspect_mode"] = "native";
-    j["bg_fill"] = "blurred";
+    j["bg_fill"] = kDefaultBgFill;
     j["bg_fill_color"] = { 0, 0, 0 };
-    j["render_backend"] = "auto";
+    j["render_backend"] = kDefaultRenderBackend;
     /* reborn_features is intentionally absent — its presence is the signal
      * to override the compile-time feature defaults. */
     j["bindings"] = nlohmann::json::object();
@@ -748,7 +773,7 @@ extern "C" void Port_Config_Load(const char* path) {
             else
                 sAspectMode = PORT_ASPECT_NATIVE_3_2;
 
-            std::string bf = JsonValue(j, "bg_fill", std::string("blurred"));
+            std::string bf = JsonValue(j, "bg_fill", std::string(kDefaultBgFill));
             for (char& c : bf) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
@@ -775,7 +800,7 @@ extern "C" void Port_Config_Load(const char* path) {
             }
         }
         {
-            std::string rb = JsonValue(j, "render_backend", std::string("auto"));
+            std::string rb = JsonValue(j, "render_backend", std::string(kDefaultRenderBackend));
             for (char& c : rb) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
