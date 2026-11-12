@@ -398,6 +398,11 @@ bool obj_resolve(int x, int line, uint line_dispcnt, out uint out_col, out int o
 /* ---- window + blend (composite_line) ---- */
 const int IO_WIN0H = 0x40;
 const int IO_WIN1H = 0x42;
+const int IO_WS_WIN0_L = 0x56;
+const int IO_WS_WIN0_R = 0x58;
+const int IO_WS_WIN1_L = 0x5A;
+const int IO_WS_WIN1_R = 0x5C;
+const int IO_WS_WIN_FLAGS = 0x5E;
 const int IO_WIN0V = 0x44;
 const int IO_WIN1V = 0x46;
 const int IO_WININ = 0x48;
@@ -512,10 +517,23 @@ vec4 ppu_pixel(int x, int line) {
         int w0t = int(win0v >> 8u), w0b = int(win0v & 0xFFu);
         int w1l = int(win1h >> 8u), w1r = int(win1h & 0xFFu);
         int w1t = int(win1v >> 8u), w1b = int(win1v & 0xFFu);
-        if (w0r > frame_width) w0r = frame_width;
+        /* X2 >= 240 is the right screen edge; wide frames use their edge. */
+        if (w0r >= 240) w0r = frame_width;
         if (w0b > 160) w0b = 160;
-        if (w1r > frame_width) w1r = frame_width;
+        if (w1r >= 240) w1r = frame_width;
         if (w1b > 160) w1b = 160;
+        /* Widescreen side channel (mode1.c): full edges in unused I/O. */
+        if (frame_width > 240) {
+            uint wsf = io_u16(line, IO_WS_WIN_FLAGS);
+            if ((wsf & 1u) != 0u) {
+                w0l = min(int(io_u16(line, IO_WS_WIN0_L)), frame_width);
+                w0r = max(min(int(io_u16(line, IO_WS_WIN0_R)), frame_width), w0l);
+            }
+            if ((wsf & 2u) != 0u) {
+                w1l = min(int(io_u16(line, IO_WS_WIN1_L)), frame_width);
+                w1r = max(min(int(io_u16(line, IO_WS_WIN1_R)), frame_width), w1l);
+            }
+        }
         bool w0hw = w0l > w0r, w0vw = w0t > w0b;
         bool w1hw = w1l > w1r, w1vw = w1t > w1b;
         bool w0va = win0_on && (w0vw ? (line >= w0t || line < w0b) : (line >= w0t && line < w0b));

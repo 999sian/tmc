@@ -35,7 +35,8 @@
 #include "ui.h"         /* gHUD, HUD_HIDE_ALL (TMC_ROOMCAP_CLEAN) */
 #include "game.h"       /* GAMEMAIN_UPDATE (TMC_ROOMCAP_TOUR) */
 #include "player.h"     /* gPlayerEntity (TMC_ROOMCAP_CLEAN) */
-#include "item_ids.h"   /* ITEM_KINSTONE_BAG (TMC_ROOMCAP_TOUR) */
+#include "item_ids.h"
+#include "area.h"      /* gAreaRoomHeaders (TMC_ROOMCAP_AUDIT) */   /* ITEM_KINSTONE_BAG (TMC_ROOMCAP_TOUR) */
 
 extern int Port_CaptureBaseFramebufferPNG(const char* path);
 extern int Port_CapturePresentationPNG(const char* path);
@@ -48,6 +49,24 @@ static int RoomCap_Capture(const char* path) {
     return Port_CaptureBaseFramebufferPNG(path) ? 1 : -1;
 }
 /* Parse before narrowing to the warp API's byte/halfword fields. */
+/* Resume index from env `name`: unset -> 0; otherwise 0..count or exit. */
+static int RoomCap_StartIndex(const char* name, int count) {
+    const char* st = getenv(name);
+    if (!st || !*st)
+        return 0;
+    char* end;
+    errno = 0;
+    long start = strtol(st, &end, 10);
+    int parsed = end != st;
+    while (isspace((unsigned char)*end))
+        ++end;
+    if (!parsed || *end || errno || start < 0 || start > count) {
+        fprintf(stderr, "[roomcap] invalid %s %s (expected 0..%d)\n", name, st, count);
+        _Exit(2);
+    }
+    return (int)start;
+}
+
 static int RoomCap_ParseTourRow(const char* line, unsigned int values[5]) {
     int count = 0;
     while (1) {
@@ -253,6 +272,516 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         fprintf(stderr, "[roomcap] frame %u: bootstrapped new game -> TASK_GAME (start 0x%02x/0x%02x)\n", frame, a, r);
     }
 
+    /* TMC_ROOMCAP_AUDIT=<all|area,area,...>: edge-scroll transition audit.
+     * One session walks Link (noclip, no damage) out of every room edge
+     * that borders another room of the same area, and logs each roll:
+     *   [audit] J=<job> a= r= d= along= dest= res=<ok|blocked|exit|warpfail|stuck>
+     *           void=<max px outside both rooms> voidcols= rev= wchg= jump= step=
+     *           S=<x,y,w,h> D=<x,y,w,h>
+     * plus [audit-cap] lines naming each capture (TMC_ROOMCAP_AUDIT_OUT/
+     * jNNNNN_<tag>.png) with the camera it was taken at, for offline image
+     * checks. TMC_ROOMCAP_AUDIT_START resumes at a job; TMC_ROOMCAP_AUDIT_EXITS=1
+     * also walks edges with no neighbor room (area-change exits). */
+    {
+        typedef struct {
+            unsigned char area, room, dir, dest;
+            unsigned short along, lo, hi; /* run of the edge facing dest */
+        } AuJob;
+        static int au = -1, nj = 0, ji = 0, st = 0;
+        static AuJob jobs[8192];
+        static unsigned int fired = 0, since = 0, mark = 0;
+        static int lsx, lsy, stable, rwid, rlast, rstep, rfail_rev, rfail_w, vmax, vcols, lastcap, forced, jump;
+        static int pcx, pcy, pcw, ax, ay;
+        static int S[4], D[4];
+        if (au < 0) {
+            const char* spec = getenv("TMC_ROOMCAP_AUDIT");
+            au = 0;
+            if (spec && *spec) {
+                const int exits = getenv("TMC_ROOMCAP_AUDIT_EXITS") != NULL;
+                unsigned char want[256] = { 0 };
+                extern int Port_DebugAction_AreaIsWarpable(unsigned char area);
+                if (strcmp(spec, "all") == 0) {
+                    for (int a = 0; a < 0x90; a++)
+                        want[a] = Port_DebugAction_AreaIsWarpable((unsigned char)a) != 0;
+                } else {
+                    const char* p = spec;
+                    while (*p) {
+                        char* end;
+                        long a = strtol(p, &end, 0);
+                        if (end == p)
+                            break;
+                        if (a >= 0 && a < 256)
+                            want[a] = 1;
+                        p = *end ? end + 1 : end;
+                    }
+                }
+                for (int a = 0; a < 256; a++) {
+                    if (!want[a])
+                        continue;
+                    extern bool32 Port_IsRoomHeaderPtrReadable(const void* ptr);
+                    extern void Port_RefreshAreaData(u32 area);
+                    RoomHeader* t = gAreaRoomHeaders[a];
+                    if (!Port_IsRoomHeaderPtrReadable(t)) {
+                        Port_RefreshAreaData((u32)a);
+                        t = gAreaRoomHeaders[a];
+                    }
+                    if (!Port_IsRoomHeaderPtrReadable(t))
+                        continue;
+                    int n = 0;
+                    while (n < 64 && Port_IsRoomHeaderPtrReadable(t + n) && t[n].map_x != 0xFFFF)
+                        n++;
+                    for (int r = 0; r < n; r++) {
+                        const RoomHeader* h = &t[r];
+                        if (h->tileSet_id == 0xFFFF || h->pixel_width == 0 || h->pixel_height == 0)
+                            continue;
+                        for (int d = 0; d < 4; d++) {
+                            int span = (d & 1) ? h->pixel_height : h->pixel_width;
+                            int runStart = -1, runDest = -1;
+                            for (int along = 8; along <= span - 8 + 8; along += 8) {
+                                int nb = -1;
+                                if (along <= span - 8) {
+                                    int px = d == 1 ? h->map_x + h->pixel_width + 16 : d == 3 ? h->map_x - 16 : h->map_x + along;
+                                    int py = d == 0 ? h->map_y - 16 : d == 2 ? h->map_y + h->pixel_height + 16 : h->map_y + along;
+                                    nb = 0xFF;
+                                    for (int q = 0; q < n; q++) {
+                                        const RoomHeader* o = &t[q];
+                                        if (q == r || o->tileSet_id == 0xFFFF)
+                                            continue;
+                                        if ((u32)(px - o->map_x) < o->pixel_width && (u32)(py - o->map_y) < o->pixel_height) {
+                                            nb = q;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (nb != runDest) {
+                                    if (runStart >= 0 && (runDest != 0xFF || exits) && nj < 8192) {
+                                        AuJob* j = &jobs[nj++];
+                                        j->area = (unsigned char)a, j->room = (unsigned char)r, j->dir = (unsigned char)d;
+                                        j->dest = (unsigned char)runDest;
+                                        j->along = (unsigned short)((runStart + along - 8) / 2);
+                                        j->lo = (unsigned short)runStart, j->hi = (unsigned short)(along - 8);
+                                    }
+                                    runStart = along, runDest = nb;
+                                }
+                            }
+                        }
+                    }
+                }
+                ji = RoomCap_StartIndex("TMC_ROOMCAP_AUDIT_START", nj);
+                au = tour_running = 1;
+                fprintf(stderr, "[audit] %d jobs, from %d\n", nj, ji);
+            }
+        }
+        if (au) {
+            extern int Port_Widescreen_EffectiveViewWidth(void);
+            extern int Port_Widescreen_LatchedFrameWidth(void);
+            extern void Port_Config_SetWidescreenEnabled(bool enabled);
+            static const unsigned short kKeys[] = { DPAD_UP, DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT };
+            if (!booted || gMain.task != TASK_GAME)
+                return;
+            if (ji >= nj) {
+                fprintf(stderr, "[audit] done\n");
+                fflush(stderr);
+                _Exit(0);
+            }
+            const AuJob* j = &jobs[ji];
+            const char* dir = getenv("TMC_ROOMCAP_AUDIT_OUT");
+            char path[512];
+            Port_Config_SetWidescreenEnabled(true);
+            Port_DebugAction_SetNoclip(1);
+            Port_DebugAction_SetNoDamage(1);
+            gHUD.hideFlags = HUD_HIDE_ALL;
+            gSave.stats.health = gSave.stats.maxHealth;
+            const int calm = gPlayerState.controlMode == CONTROL_ENABLED && !(gMessage.state & MESSAGE_ACTIVE);
+            if (!calm && st != 5 && frame % 40 < 2) {
+                extern void Port_Config_TestForceEdge(int input);
+                Port_Config_TestForceEdge(0 /* PORT_INPUT_A */);
+            }
+            if (since == 0)
+                since = frame;
+            const int vw = Port_Widescreen_LatchedFrameWidth();
+            const int sx = gRoomControls.scroll_x, sy = gRoomControls.scroll_y;
+#define AU_CAP(tag)                                                                                                    \
+    do {                                                                                                               \
+        snprintf(path, sizeof path, "%s/j%05d_%s.png", dir && *dir ? dir : ".", ji, tag);                              \
+        if (RoomCap_Capture(path) > 0)                                                                                 \
+            fprintf(stderr, "[audit-cap] J=%d tag=%s cam=%d,%d,%d prev=%d,%d,%d\n", ji, tag, sx, sy, vw, pcx, pcy,    \
+                    pcw);                                                                                              \
+    } while (0)
+#define AU_NEXT(res, jump)                                                                                             \
+    do {                                                                                                               \
+        fprintf(stderr,                                                                                                \
+                "[audit] J=%d a=%02x r=%02x d=%d along=%d,%d dest=%02x res=%s void=%d voidcols=%d rev=%d wchg=%d "       \
+                "jump=%d step=%d S=%d,%d,%d,%d D=%d,%d,%d,%d link=%d,%d st=%d ps=%d forced=%d now=%02x/%02x sub=%d ctl=%d\n",                                                       \
+                ji, j->area, j->room, j->dir, ax, ay, j->dest, res, vmax, vcols, rfail_rev, rfail_w, jump, rstep, \
+                S[0], S[1], S[2], S[3], D[0], D[1], D[2], D[3], gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x, gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y, st, gPlayerState.framestate, forced, gRoomControls.area, gRoomControls.room, gMain.substate, gPlayerState.controlMode);                                                       \
+        fflush(stderr);                                                                                                \
+        ++ji, st = 0, since = 0, fired = 0, forced = 0;                                                                            \
+    } while (0)
+            if (st != 5 && st != 6 && frame - since > 1200) {
+                AU_NEXT(st <= 1 ? "warpfail" : "stuck", 0);
+                return;
+            }
+            const RoomHeader* hs = &gAreaRoomHeaders[j->area][j->room];
+            const int lx = (j->dir & 1) ? (j->dir == 1 ? hs->pixel_width - 5 : 5) : j->along;
+            const int ly = (j->dir & 1) ? j->along : (j->dir == 2 ? hs->pixel_height - 5 : 5);
+            (void)ax, (void)ay;
+            switch (st) {
+                case 0:
+                    vmax = vcols = rfail_rev = rfail_w = rstep = jump = 0, rwid = -1, lastcap = -100, ax = ay = -1;
+                    memset(S, 0, sizeof S), memset(D, 0, sizeof D);
+                    if (gRoomControls.area == j->area && gRoomControls.room == j->room && calm &&
+                        gRoomControls.camera_target == &gPlayerEntity.base) {
+                        st = 2, mark = frame; /* already here */
+                    } else if ((fired == 0 || frame - fired > 180) &&
+                               Port_DebugAction_Warp(j->area, j->room, (unsigned short)lx, (unsigned short)ly, 1) == 1) {
+                        fired = frame, st = 1;
+                    }
+                    break;
+                case 1:
+                    if (gRoomControls.area == j->area && gRoomControls.room == j->room && calm &&
+                        (gMain.substate == GAMEMAIN_UPDATE || gMain.substate == GAMEMAIN_BARRELUPDATE) &&
+                        gRoomControls.camera_target == &gPlayerEntity.base && frame - fired > 20) {
+                        st = 2, mark = frame;
+                    } else if (gRoomControls.area == j->area && gRoomControls.room == j->room &&
+                               gMain.substate == GAMEMAIN_UPDATE && frame - fired > 150) {
+                        /* Rooms that open on a cutscene or point the camera
+                         * elsewhere (Great Fairies, Castor Darknut): take
+                         * control back, the roll is what is audited. */
+                        gRoomControls.camera_target = &gPlayerEntity.base;
+                        gPlayerState.controlMode = CONTROL_ENABLED;
+                        gMessage.state &= ~MESSAGE_ACTIVE;
+                        st = 2, mark = frame;
+                    } else if (frame - fired > 180) {
+                        st = 0;
+                    }
+                    break;
+                case 2:
+                    if (frame - mark < 10)
+                        break;
+                    {
+                        /* The edge only lets Link out where the tile past him
+                         * reads collision 255 (a doorway; beanstalkSubtask.c's test).
+                         * Take the middle of
+                         * the longest such stretch facing dest, on either layer. */
+                        extern u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer);
+                        int best = -1, bestLen = 0, bestLayer = 1;
+                        for (int layer = 1; layer <= 2; layer++) {
+                            int run0 = -1;
+                            for (int a = j->lo; a <= j->hi + 4; a += 4) {
+                                int ok = 0;
+                                if (a <= j->hi) {
+                                    /* the border tile just past the edge */
+                                    int px = gRoomControls.origin_x +
+                                             ((j->dir & 1) ? (j->dir == 1 ? gRoomControls.width : -1) : a);
+                                    int py = gRoomControls.origin_y +
+                                             ((j->dir & 1) ? a : (j->dir == 2 ? gRoomControls.height : -1));
+                                    ok = GetCollisionDataAtTilePos(TILE(px, py), (u32)layer) == 255;
+                                }
+                                if (ok && run0 < 0)
+                                    run0 = a;
+                                if (!ok && run0 >= 0) {
+                                    if (a - run0 > bestLen)
+                                        bestLen = a - run0, best = (run0 + a - 4) / 2, bestLayer = layer;
+                                    run0 = -1;
+                                }
+                            }
+                        }
+                        if (best < 0) {
+                            AU_NEXT("wall", 0);
+                            return;
+                        }
+                        ax = (j->dir & 1) ? lx : best;
+                        ay = (j->dir & 1) ? best : ly;
+                        gPlayerEntity.base.collisionLayer = (u8)bestLayer;
+                        gPlayerEntity.base.x.HALF.HI = (s16)(gRoomControls.origin_x + ax);
+                        gPlayerEntity.base.y.HALF.HI = (s16)(gRoomControls.origin_y + ay);
+                    }
+                    st = 3, stable = 0, mark = frame;
+                    break;
+                case 3:
+                    stable = (sx == lsx && sy == lsy) ? stable + 1 : 0;
+                    if (stable >= 4 || frame - mark > 150) {
+                        AU_CAP("pre");
+                        st = 4, mark = frame;
+                    }
+                    break;
+                case 4:
+                    *(volatile unsigned short*)(gIoMem + KEYINPUT_REG) &= ~kKeys[j->dir];
+                    if (gRoomControls.scrollAction == 2) {
+                        const RoomHeader* hd = j->dest != 0xFF ? &gAreaRoomHeaders[j->area][j->dest] : NULL;
+                        S[0] = hs->map_x, S[1] = hs->map_y, S[2] = hs->pixel_width, S[3] = hs->pixel_height;
+                        if (hd)
+                            D[0] = hd->map_x, D[1] = hd->map_y, D[2] = hd->pixel_width, D[3] = hd->pixel_height;
+                        rlast = (j->dir & 1) ? sx + Port_Widescreen_EffectiveViewWidth() / 2 : sy;
+                        st = 5, mark = frame;
+                    } else if (gRoomControls.area != j->area || gRoomControls.room != j->room || gFadeControl.active) {
+                        AU_NEXT("exit", 0);
+                        return;
+                    } else if (frame - mark > 30 && j->dest != 0xFF && !forced) {
+                        /* Walking out failed (trees, bushes, story gates in
+                         * this save). Start the roll the way the edge check
+                         * does, from the doorway, so the render is audited. */
+                        gPlayerEntity.base.x.HALF.HI = (s16)(gRoomControls.origin_x + ax);
+                        gPlayerEntity.base.y.HALF.HI = (s16)(gRoomControls.origin_y + ay);
+                        gPlayerEntity.base.direction = (u8)(j->dir << 3);
+                        if (sub_0807BD14(&gPlayerEntity.base, j->dir))
+                            forced = 1, gPlayerEntity.base.direction = (u8)(j->dir << 3);
+                        else
+                            forced = 2;
+                    } else if (frame - mark > 60) {
+                        AU_NEXT("blocked", 0);
+                        return;
+                    }
+                    break;
+                case 5: {
+                    const int pos = (j->dir & 1) ? sx + Port_Widescreen_EffectiveViewWidth() / 2 : sy;
+                    if (gRoomControls.scrollAction != 2) {
+                        /* the handover frame: compare with the last roll frame */
+                        jump = pos - rlast;
+                        st = 6, mark = frame;
+                        break;
+                    }
+                    if (gRoomControls.unk_18 >= 1) {
+                        /* widths ease now: flag only a pop (>16px in a frame) */
+                        if (rwid >= 0 && abs(vw - rwid) > 16)
+                            rfail_w = 1;
+                        rwid = vw;
+                    }
+                    if ((j->dir == 1 || j->dir == 2) ? pos < rlast : pos > rlast)
+                        rfail_rev = 1;
+                    if (gRoomControls.unk_18 >= 2 && abs(pos - rlast) > rstep)
+                        rstep = abs(pos - rlast);
+                    rlast = pos;
+                    /* view area outside both rooms, at the width this
+                     * frame presents (the latch lags the camera a tick) */
+                    {
+                        const int vw = Port_Widescreen_EffectiveViewWidth();
+                        long cover = 0;
+                        int cols = 0;
+                        const int* R[2] = { S, D };
+                        for (int k = 0; k < 2; k++) {
+                            int x0 = sx > R[k][0] ? sx : R[k][0], x1 = sx + vw < R[k][0] + R[k][2] ? sx + vw : R[k][0] + R[k][2];
+                            int y0 = sy > R[k][1] ? sy : R[k][1], y1 = sy + 160 < R[k][1] + R[k][3] ? sy + 160 : R[k][1] + R[k][3];
+                            if (x1 > x0 && y1 > y0)
+                                cover += (long)(x1 - x0) * (y1 - y0);
+                        }
+                        for (int c = 0; c < vw; c++) {
+                            int wx = sx + c, in = 0;
+                            for (int k = 0; k < 2; k++)
+                                in |= wx >= R[k][0] && wx < R[k][0] + R[k][2];
+                            cols += !in;
+                        }
+                        int v = (int)((long)vw * 160 - cover);
+                        if (v > vmax)
+                            vmax = v;
+                        if (cols > vcols)
+                            vcols = cols;
+                    }
+                    if (gRoomControls.unk_18 >= lastcap + 12) {
+                        char tag[16];
+                        snprintf(tag, sizeof tag, "s%02d", (int)gRoomControls.unk_18);
+                        AU_CAP(tag);
+                        lastcap = gRoomControls.unk_18;
+                    }
+                    break;
+                }
+                case 6: {
+                    if (frame - mark >= 40) {
+                        AU_CAP("post");
+                        AU_NEXT(abs(jump) > rstep + 1 ? "jump" : "ok", jump);
+                        return;
+                    }
+                    break;
+                }
+            }
+            lsx = sx, lsy = sy;
+            pcx = sx, pcy = sy, pcw = vw;
+#undef AU_CAP
+#undef AU_NEXT
+            return;
+        }
+    }
+
+    /* TMC_ROOMCAP_DOORS=<all|area,area,...>: door, stair and warp audit.
+     * For every room of the wanted areas, fires each entry of the room's
+     * exit list (gArea.pCurrentRoomInfo->exits) exactly as stepping on it
+     * would (DoExitTransition), then watches the arrival in widescreen:
+     *   [door] a= r= e=<exit index> type= to=<area/room> now=<area/room> res=<ok|redirect|pop|jump|void|stuck|noexit>
+     *          arrW= setW= arr=<scroll x,y> set=<scroll x,y> step=<max px/frame> void=<px>
+     * res=pop: the view width changed by more than 16px between the first
+     * visible frame and 30 frames later; jump: the camera moved more than
+     * 16px in one frame; void: the settled view runs past the room's bounds;
+ * redirect: the story sent Link elsewhere (Hyrule Town -> Festival Town).
+     * Captures go to TMC_ROOMCAP_DOORS_OUT/dNNNNN_eNN_{arr,set}.png. */
+    {
+        static int dm = -1, nr = 0, ri = 0, ei = 0, dst = 0, dtries = 0;
+        static unsigned short rooms[4096];
+        static unsigned int dfired = 0, dmark = 0;
+        static int arrW, arrX, arrY, lastX, lastY, maxStep;
+        static Transition tr;
+        if (dm < 0) {
+            const char* spec = getenv("TMC_ROOMCAP_DOORS");
+            dm = 0;
+            if (spec && *spec) {
+                extern int Port_DebugAction_AreaIsWarpable(unsigned char area);
+                unsigned char want[256] = { 0 };
+                if (strcmp(spec, "all") == 0) {
+                    for (int a = 0; a < 0x90; a++)
+                        want[a] = Port_DebugAction_AreaIsWarpable((unsigned char)a) != 0;
+                } else {
+                    for (const char* p = spec; *p;) {
+                        char* end;
+                        long a = strtol(p, &end, 0);
+                        if (end == p)
+                            break;
+                        if (a >= 0 && a < 256)
+                            want[a] = 1;
+                        p = *end ? end + 1 : end;
+                    }
+                }
+                for (int a = 0; a < 256; a++) {
+                    if (!want[a] || !Port_IsRoomHeaderPtrReadable(gAreaRoomHeaders[a]))
+                        continue;
+                    for (int r = 0; r < 64 && gAreaRoomHeaders[a][r].map_x != 0xFFFF && nr < 4096; r++)
+                        if (gAreaRoomHeaders[a][r].tileSet_id != 0xFFFF)
+                            rooms[nr++] = (unsigned short)(a << 8 | r);
+                }
+                ri = RoomCap_StartIndex("TMC_ROOMCAP_DOORS_START", nr);
+                dm = tour_running = 1;
+                fprintf(stderr, "[door] %d rooms, from %d\n", nr, ri);
+            }
+        }
+        if (dm) {
+            extern int Port_Widescreen_LatchedFrameWidth(void);
+            extern void Port_Config_SetWidescreenEnabled(bool enabled);
+            if (!booted || gMain.task != TASK_GAME)
+                return;
+            if (ri >= nr) {
+                fprintf(stderr, "[door] done\n");
+                fflush(stderr);
+                _Exit(0);
+            }
+            const unsigned char area = (unsigned char)(rooms[ri] >> 8), room = (unsigned char)rooms[ri];
+            const char* dir = getenv("TMC_ROOMCAP_DOORS_OUT");
+            char path[512];
+            const int vw = Port_Widescreen_LatchedFrameWidth();
+            const int sx = gRoomControls.scroll_x, sy = gRoomControls.scroll_y;
+            Port_Config_SetWidescreenEnabled(true);
+            Port_DebugAction_SetNoclip(1);
+            Port_DebugAction_SetNoDamage(1);
+            gHUD.hideFlags = HUD_HIDE_ALL;
+            gSave.stats.health = gSave.stats.maxHealth;
+            const int calm = gPlayerState.controlMode == CONTROL_ENABLED && !(gMessage.state & MESSAGE_ACTIVE);
+            if (!calm && frame % 40 < 2) {
+                extern void Port_Config_TestForceEdge(int input);
+                Port_Config_TestForceEdge(0 /* PORT_INPUT_A */);
+            }
+#define DOOR_CAP(tag)                                                                                                  \
+    do {                                                                                                               \
+        snprintf(path, sizeof path, "%s/d%05d_e%02d_%s.png", dir && *dir ? dir : ".", ri, ei, tag);                    \
+        RoomCap_Capture(path);                                                                                         \
+    } while (0)
+#define DOOR_LOG(res, setW, vd)                                                                                        \
+    fprintf(stderr,                                                                                                    \
+            "[door] R=%d a=%02x r=%02x e=%d type=%d to=%02x/%02x now=%02x/%02x res=%s arrW=%d setW=%d arr=%d,%d "  \
+            "set=%d,%d step=%d void=%d\n",                                                                             \
+            ri, area, room, ei, tr.warp_type, tr.area, tr.room, gRoomControls.area, gRoomControls.room, res, arrW,    \
+            setW, arrX, arrY, sx, sy, maxStep, vd)
+            switch (dst) {
+                case 0: /* into the source room */
+                    if (gRoomControls.area == area && gRoomControls.room == room && calm &&
+                        gMain.substate == GAMEMAIN_UPDATE) {
+                        dst = 2, dmark = frame;
+                    } else if ((dfired == 0 || frame - dfired > 200) &&
+                               Port_DebugAction_Warp(area, room, (unsigned short)(gAreaRoomHeaders[area][room].pixel_width / 2),
+                                                     (unsigned short)(gAreaRoomHeaders[area][room].pixel_height / 2), 1) == 1) {
+                        dfired = frame, dst = 1;
+                    }
+                    break;
+                case 1:
+                    if (gRoomControls.area == area && gRoomControls.room == room &&
+                        gMain.substate == GAMEMAIN_UPDATE && frame - dfired > 20) {
+                        gRoomControls.camera_target = &gPlayerEntity.base;
+                        gPlayerState.controlMode = CONTROL_ENABLED;
+                        gMessage.state &= ~MESSAGE_ACTIVE;
+                        dst = 2, dmark = frame, dtries = 0;
+                    } else if (frame - dfired > 200) {
+                        if (++dtries >= 3) {
+                            fprintf(stderr, "[door] R=%d a=%02x r=%02x res=warpfail now=%02x/%02x sub=%d\n", ri, area,
+                                    room, gRoomControls.area, gRoomControls.room, gMain.substate);
+                            ++ri, ei = 0, dfired = 0, dtries = 0;
+                        }
+                        dst = 0;
+                    }
+                    break;
+                case 2: { /* fire exit ei */
+                    if (frame - dmark < 10)
+                        break;
+                    const Transition* ex = gArea.pCurrentRoomInfo ? gArea.pCurrentRoomInfo->exits : NULL;
+                    int n = 0;
+                    while (ex && ex[n].warp_type != WARP_TYPE_END_OF_LIST && n < 64)
+                        ++n;
+                    if (ei >= n) {
+                        if (n == 0)
+                            fprintf(stderr, "[door] R=%d a=%02x r=%02x res=noexit\n", ri, area, room);
+                        ++ri, ei = 0, dst = 0, dfired = 0;
+                        break;
+                    }
+                    tr = ex[ei];
+                    gRoomTransition.stairs_idx = 0;
+                    DoExitTransition(&tr);
+                    maxStep = 0, arrW = -1;
+                    dst = 3, dmark = frame;
+                    break;
+                }
+                case 3: /* wait for the destination to show */
+                    /* Story redirects (Hyrule Town -> Festival Town) land
+                     * elsewhere than the exit names: any new room counts. */
+                    if (((gRoomControls.area == tr.area && gRoomControls.room == tr.room) ||
+                         gRoomControls.area != area || gRoomControls.room != room) &&
+                        frame - dmark > 20 && gMain.substate == GAMEMAIN_UPDATE && !gFadeControl.active) {
+                        DOOR_CAP("arr");
+                        arrW = vw, arrX = sx, arrY = sy, lastX = sx, lastY = sy;
+                        dst = 4, dmark = frame;
+                    } else if (frame - dmark > 400) {
+                        DOOR_LOG("stuck", vw, 0);
+                        ++ei, dst = 0, dfired = 0;
+                    }
+                    break;
+                case 4: { /* settle */
+                    const int step = abs(sx - lastX) > abs(sy - lastY) ? abs(sx - lastX) : abs(sy - lastY);
+                    if (step > maxStep)
+                        maxStep = step;
+                    lastX = sx, lastY = sy;
+                    if (frame - dmark < 30)
+                        break;
+                    DOOR_CAP("set");
+                    int vd = 0;
+                    if (vw > 240) {
+                        const int over = (gRoomControls.origin_x - sx > 0 ? gRoomControls.origin_x - sx : 0) +
+                                         (sx + vw - (gRoomControls.origin_x + (int)gRoomControls.width) > 0
+                                              ? sx + vw - (gRoomControls.origin_x + (int)gRoomControls.width)
+                                              : 0);
+                        vd = over;
+                    }
+                    DOOR_LOG(gRoomControls.area != tr.area || gRoomControls.room != tr.room ? "redirect"
+                             : abs(vw - arrW) > 16                                          ? "pop"
+                             : maxStep > 16                                                 ? "jump"
+                             : vd > 0                                                       ? "void"
+                                                                                            : "ok",
+                             vw, vd);
+                    fflush(stderr);
+                    ++ei, dst = 0, dfired = 0;
+                    break;
+                }
+            }
+#undef DOOR_CAP
+#undef DOOR_LOG
+            return;
+        }
+    }
+
     /* TMC_ROOMCAP_TOUR=<plan>: capture many views in one session, as the
      * voxel tour (port_repro_npc_talk.c) walks every room -- a restart per
      * capture costs seconds; this costs the warp. The plan is one view a
@@ -296,20 +825,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     fprintf(stderr, "[roomcap] empty or unreadable tour plan %s\n", plan);
                     _Exit(2);
                 }
-                const char* st = getenv("TMC_ROOMCAP_TOUR_START");
-                if (st && *st) {
-                    char* end;
-                    errno = 0;
-                    long start = strtol(st, &end, 10);
-                    int parsed = end != st;
-                    while (isspace((unsigned char)*end))
-                        ++end;
-                    if (!parsed || *end || errno || start < 0 || start > tn) {
-                        fprintf(stderr, "[roomcap] invalid tour start %s (expected 0..%d)\n", st, tn);
-                        _Exit(2);
-                    }
-                    ti = (int)start;
-                }
+                ti = RoomCap_StartIndex("TMC_ROOMCAP_TOUR_START", tn);
                 tour = tour_running = 1;
                 fprintf(stderr, "[roomcap] tour: %d views, from %d\n", tn, ti);
             }
@@ -632,6 +1148,167 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             if (lstage < 5)
                 return;
         }
+    }
+
+    /* ---- TMC_ROOMCAP_ROLL_PROBE=<up|right|down|left>: edge-scroll ------
+     * Walks Link across the room edge and checks the widescreen rolling
+     * transition: the presented width eases one way in small steps, the camera
+     * moves monotonically, and it hands over to the follow camera without
+     * a jump. Captures <OUT base>_roll_{05,30,end}.png. Exits 0/5. */
+    {
+        static int rprobe = -2, rstage = 0, rcand = 0, rdir = 1, rwidth = -1, rlast = 0, rstep = 0, rfail = 0;
+        static unsigned int rdeadline = 0, rendframe = 0;
+        if (rprobe == -2) {
+            static const char* const kDirs[] = { "up", "right", "down", "left" };
+            const char* e = getenv("TMC_ROOMCAP_ROLL_PROBE");
+            rprobe = 0;
+            if (e && *e) {
+                rprobe = 1;
+                for (int i = 0; i < 4; ++i)
+                    if (strcmp(e, kDirs[i]) == 0)
+                        rdir = i;
+            }
+        }
+        if (rprobe && warp_done && (int)frame >= cap_frame - settle + 120) {
+            extern int Port_Widescreen_EffectiveViewWidth(void);
+            extern int Port_Widescreen_LatchedFrameWidth(void);
+            extern int Port_Widescreen_CameraRestX(int target_x);
+            static const unsigned short kKeys[] = { DPAD_UP, DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT };
+            const char* base = getenv("TMC_ROOMCAP_OUT");
+            char path[512];
+            /* Horizontal rolls track the view centre: a roll between rooms of
+             * different widths changes the view width, which moves the left
+             * edge while the picture's centre holds still. */
+            int pos = (rdir & 1) ? gRoomControls.scroll_x + Port_Widescreen_EffectiveViewWidth() / 2
+                                 : gRoomControls.scroll_y;
+            int latched = Port_Widescreen_LatchedFrameWidth();
+            if (!base || !*base)
+                base = "roomcap";
+            switch (rstage) {
+                case 0: /* step to just inside the chosen edge, then walk out */
+                    {
+                        extern void Port_Config_SetWidescreenEnabled(bool enabled);
+                        Port_Config_SetWidescreenEnabled(true);
+                    }
+                    {
+                        /* Try points along the edge until one is an open exit. */
+                        int along = 24 + 16 * rcand++;
+                        int span = (rdir & 1) ? gRoomControls.height : gRoomControls.width;
+                        if (along > span - 24) {
+                            fprintf(stderr, "[roll-probe] FAIL no open exit on edge %d\n", rdir);
+                            fflush(stderr);
+                            _Exit(5);
+                        }
+                        if (rdir & 1) {
+                            gPlayerEntity.base.x.HALF.HI = (s16)(gRoomControls.origin_x +
+                                                                  (rdir == 1 ? gRoomControls.width - 6 : 6));
+                            gPlayerEntity.base.y.HALF.HI = (s16)(gRoomControls.origin_y + along);
+                        } else {
+                            gPlayerEntity.base.x.HALF.HI = (s16)(gRoomControls.origin_x + along);
+                            gPlayerEntity.base.y.HALF.HI = (s16)(gRoomControls.origin_y +
+                                                                  (rdir == 2 ? gRoomControls.height - 6 : 6));
+                        }
+                    }
+                    if (rcand == 1)
+                        fprintf(stderr, "[roll-probe] frame %u: room %d/%d %dx%d view=%d, walking %d\n", frame,
+                                (int)gRoomControls.area, (int)gRoomControls.room, (int)gRoomControls.width,
+                                (int)gRoomControls.height, Port_Widescreen_EffectiveViewWidth(), rdir);
+                    rdeadline = frame + 40;
+                    rstage = 1;
+                    break;
+                case 1: /* hold the direction until the roll starts */
+                    *(volatile unsigned short*)(gIoMem + KEYINPUT_REG) &= ~kKeys[rdir];
+                    if (gRoomControls.scrollAction == 2) {
+                        rlast = pos;
+                        rstage = 2;
+                        fprintf(stderr, "[roll-probe] frame %u: roll start scroll=(%d,%d) view=%d latched=%d\n", frame,
+                                (int)gRoomControls.scroll_x, (int)gRoomControls.scroll_y,
+                                Port_Widescreen_EffectiveViewWidth(), latched);
+                    } else if (frame >= rdeadline) {
+                        rstage = 0; /* blocked here: next point */
+                    }
+                    break;
+                case 2: /* rolling: width constant, camera monotonic */
+                    if (gRoomControls.scrollAction != 2) {
+                        rendframe = frame;
+                        rstage = 3;
+                        break;
+                    }
+                    if (gRoomControls.unk_18 >= 1) {
+                        /* The width may ease between the rooms' widths, but
+                         * one way only and in small steps: a jump or a
+                         * reversal is a pillarbox pop. */
+                        static int rwdir = 0;
+                        const int dw = rwidth < 0 ? 0 : latched - rwidth;
+                        if (dw > 16 || dw < -16 || (dw && rwdir && (dw > 0) != (rwdir > 0))) {
+                            fprintf(stderr, "[roll-probe] FAIL presented width %d -> %d at step %d\n", rwidth, latched,
+                                    (int)gRoomControls.unk_18);
+                            rfail = 1;
+                        }
+                        if (dw)
+                            rwdir = dw;
+                        rwidth = latched;
+                    }
+                    if ((rdir == 1 || rdir == 2) ? pos < rlast : pos > rlast) {
+                        fprintf(stderr, "[roll-probe] FAIL camera reversed %d -> %d\n", rlast, pos);
+                        rfail = 1;
+                    }
+                    if (gRoomControls.unk_18 >= 2 && (pos - rlast > rstep || rlast - pos > rstep))
+                        rstep = pos > rlast ? pos - rlast : rlast - pos;
+                    if (getenv("TMC_ROOMCAP_ROLL_TRACE"))
+                        fprintf(stderr, "[roll-probe]   step %d view=%d scroll=(%d,%d) origin=(%d,%d) player=(%d,%d)\n",
+                                (int)gRoomControls.unk_18, Port_Widescreen_EffectiveViewWidth(), (int)gRoomControls.scroll_x, (int)gRoomControls.scroll_y,
+                                (int)gRoomControls.origin_x, (int)gRoomControls.origin_y,
+                                (int)gPlayerEntity.base.x.HALF.HI, (int)gPlayerEntity.base.y.HALF.HI);
+                    rlast = pos;
+                    if (gRoomControls.unk_18 == 5 || gRoomControls.unk_18 == 30) {
+                        snprintf(path, sizeof(path), "%s_roll_%02d.png", base, (int)gRoomControls.unk_18);
+                        RoomCap_Capture(path);
+                    }
+                    break;
+                case 3: { /* first follow-camera frame: no snap */
+                    int rest = (rdir & 1) ? Port_Widescreen_CameraRestX(gPlayerEntity.base.x.HALF.HI) : pos;
+                    int jump = pos - rlast;
+                    fprintf(stderr,
+                            "[roll-probe] frame %u: roll end scroll=(%d,%d) rest_x=%d jump=%d step=%d view=%d latched=%d "
+                            "rollwidth=%d\n",
+                            frame, (int)gRoomControls.scroll_x, (int)gRoomControls.scroll_y, rest, jump, rstep,
+                            Port_Widescreen_EffectiveViewWidth(), latched, rwidth);
+                    fprintf(stderr,
+                            "[roll-probe]   room %d origin=(%d,%d) size=%dx%d player=(%d,%d) target_is_player=%d\n",
+                            (int)gRoomControls.room, (int)gRoomControls.origin_x, (int)gRoomControls.origin_y,
+                            (int)gRoomControls.width, (int)gRoomControls.height, (int)gPlayerEntity.base.x.HALF.HI,
+                            (int)gPlayerEntity.base.y.HALF.HI,
+                            gRoomControls.camera_target == &gPlayerEntity.base);
+                    if (jump > rstep || jump < -rstep) {
+                        fprintf(stderr, "[roll-probe] FAIL camera jumped %dpx at handover (roll step %d)\n", jump,
+                                rstep);
+                        rfail = 1;
+                    }
+                    if ((rdir & 1) && gRoomControls.camera_target == &gPlayerEntity.base && gRoomControls.scroll_x != rest) {
+                        fprintf(stderr, "[roll-probe] FAIL camera %d not at rest %d\n", (int)gRoomControls.scroll_x,
+                                rest);
+                        rfail = 1;
+                    }
+                    rstage = 4;
+                    break;
+                }
+                case 4:
+                    if (frame >= rendframe + 30) {
+                        snprintf(path, sizeof(path), "%s_roll_end.png", base);
+                        RoomCap_Capture(path);
+                        fprintf(stderr, "[roll-probe] %s\n", rfail ? "FAIL" : "PASS");
+                        fflush(stderr);
+                        _Exit(rfail ? 5 : 0);
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return; /* probe owns the run; skip capture */
+        }
+        if (rprobe && warp_done)
+            return;
     }
 
     /* ---- TMC_ROOMCAP_PAN_PROBE: scripted-pan camera wait (widescreen) ----

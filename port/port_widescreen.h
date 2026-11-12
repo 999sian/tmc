@@ -96,6 +96,44 @@ int Port_Widescreen_TargetViewWidth(void);
  * effective view width of 240. */
 int Port_Widescreen_CameraRestX(int target_x);
 
+/* Present width decided at vblank alongside the content it frames (240 when
+ * not wide). The presenter must use this, never a live recomputation. */
+int Port_Widescreen_LatchedFrameWidth(void);
+
+/* Wide rolling (edge-scroll) transitions: Begin in sub_0807BD14 before the
+ * room changes, Start in Scroll2Sub1, Step after Scroll2Sub2's move, End in
+ * sub_0807FEC8 (returns whether it ran wide). ComposeVram rebuilds the BG
+ * buffers from both rooms after UpdateScrollVram's rolling stream. */
+void Port_Widescreen_RollBegin(void);
+void Port_Widescreen_RollStart(void);
+void Port_Widescreen_RollStep(void);
+int Port_Widescreen_RollEnd(void);
+/* Roll width at frame k of `frames` (eases start -> roll -> destination). */
+int Port_Widescreen_RollWidthAt(int fromW, int rollW, int toW, int k, int frames);
+/* Camera progress at roll frame k; `hold` keeps it at 0 for the width ease. */
+int Port_Widescreen_RollCameraK(int k, int frames, int hold);
+/* After the rest snap: resume from the roll's last view; Scroll1 pans on. */
+void Port_Widescreen_RollHandoff(void);
+void Port_Widescreen_RollComposeVram(void);
+
+/* Rescan the current room's painted width; LoadRoomGfx calls it so camera
+ * placement on room entry already knows whether the room runs wide. */
+void Port_Widescreen_RescanRoomContent(void);
+
+/* Parallax backgrounds (Minish Rafters, Minish paths, Big Goron) copy a
+ * 32x32 tile window out of a wider image with a 128-entry row stride into
+ * `dest`, the BG's subTileMap. Record where the window starts so the
+ * widescreen shadow continues the image past the copied 256 px. `end`
+ * bounds the source buffer. */
+void Port_Widescreen_BgWindowSource(const void* dest, const void* src, const void* end);
+
+/* A BG1/BG2 texture that tiles like hardware wrap (rainy Mount Crenel's rain
+ * on BG1). Once called, shadow updates repeat its 256 px screenblock across
+ * the wide columns until the area changes; a map on that BG takes priority.
+ * Opt-in, because BG-drawn bosses (Mazaal) on a 256 px BG would show a
+ * second copy. */
+void Port_Widescreen_WrapBg(int bg);
+
 #ifdef __cplusplus
 }
 #endif

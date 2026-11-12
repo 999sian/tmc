@@ -79,6 +79,10 @@ bool Port_PPU_LcdPersistenceEnabled(void);
 // Cleanup
 void Port_PPU_Shutdown(void);
 
+/* Bar colour for this frame when its edges are one flat colour on a
+ * screen that asks for it (Game Over); 0 means use the configured fill. */
+int Port_PPU_EdgeFill(uint8_t* r, uint8_t* g, uint8_t* b);
+
 void Port_OpenInGameSettingsModal(void);
 bool Port_InGameSettingsModalIsOpen(void);
 

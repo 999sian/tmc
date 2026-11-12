@@ -10,6 +10,9 @@
 #include "game.h"
 #include "vram.h"
 #include "room.h"
+#ifdef PC_PORT
+#include "port_widescreen.h"
+#endif
 
 void sub_08057F20(HorizontalMinishPathBackgroundManager*);
 void HorizontalMinishPathBackgroundManager_OnEnterRoom(HorizontalMinishPathBackgroundManager*);
@@ -91,6 +94,9 @@ void sub_08058004(u32 unk1, void* src, void* dest) {
     }
 #endif
     src += startOff;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    Port_Widescreen_BgWindowSource(dest, src, gUnk_02006F00 + 0x4000);
+#endif
     for (tmp; tmp != 0; tmp--) {
         DmaCopy16(3, src, dest, 0x20 * 2);
         src += 0x100;

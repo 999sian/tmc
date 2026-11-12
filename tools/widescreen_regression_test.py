@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,12 +19,19 @@ def main():
         ]
         subprocess.run(command, cwd=ROOT, check=True)
         subprocess.run([str(binary)], check=True)
+        binary = Path(directory) / 'hdma-window'
+        command = shlex.split(os.environ.get('CC', 'cc')) + [
+            '-std=gnu11', '-O2', '-Iport', 'tools/tests/widescreen_hdma_window.c', 'port/port_hdma.c',
+            '-o', str(binary),
+        ]
+        subprocess.run(command, cwd=ROOT, check=True)
+        subprocess.run([str(binary)], check=True)
         for width in (240, 384):
             binary = Path(directory) / f'dampe-{width}'
             command = shlex.split(os.environ.get('CC', 'cc')) + [
                 '-std=gnu11', '-O2', '-DPC_PORT', '-DUSA', f'-DMODE1_GBA_WIDTH={width}',
                 '-I.', '-Iinclude', '-Iport', '-ffunction-sections', '-fdata-sections',
-                'tools/tests/widescreen_dampe.c', '-Wl,--gc-sections', '-o', str(binary),
+                'tools/tests/widescreen_dampe.c', '-Wl,-dead_strip' if sys.platform == 'darwin' else '-Wl,--gc-sections', '-o', str(binary),
             ]
             subprocess.run(command, cwd=ROOT, check=True)
             subprocess.run([str(binary)], check=True)

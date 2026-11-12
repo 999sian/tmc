@@ -14,6 +14,29 @@ static u32 sub_080501C0(FadeControl* ctl);
 static u32 sub_08050230(FadeControl* ctl);
 static u32 sub_080502A4(FadeControl* ctl);
 
+#ifdef PC_PORT
+extern int Port_Widescreen_EffectiveViewWidth(void);
+
+/* The iris opens to 150 px, enough to reach every corner of the 240x160
+ * screen. A wide frame's corners lie further out, so they cut to black on
+ * the first frame of a close and popped back on the last of an open.
+ * Past half size the radius grows toward the wide frame's farthest corner,
+ * so it ends exactly when the GBA's does; small circles stay unchanged. */
+static u32 Port_IrisRadius(u32 x, u32 y, u32 size) {
+    const s32 w = Port_Widescreen_EffectiveViewWidth();
+    const s32 dx = max((s32)x, w - (s32)x), dy = max((s32)y, DISPLAY_HEIGHT - (s32)y);
+    s32 cover = 150;
+    if (w <= DISPLAY_WIDTH || size <= 75)
+        return size;
+    while (cover * cover < dx * dx + dy * dy)
+        cover++;
+    return size + (u32)((cover - 150) * ((s32)size - 75) / 75);
+}
+#define IRIS_RADIUS(size) Port_IrisRadius(gFadeControl.iris_x, gFadeControl.iris_y, (size))
+#else
+#define IRIS_RADIUS(size) (size)
+#endif
+
 extern u32 gUsedPalettes;
 extern u16 gPaletteBuffer[];
 extern u16 gUnk_080FC3C4[];
@@ -205,7 +228,7 @@ void SetFade(u32 type, u32 speed) {
     }
     if (type & FADE_IRIS) {
         sub_0801E1B8(gFadeControl.win_inside_cnt, gFadeControl.win_outside_cnt);
-        sub_0801E1EC(gFadeControl.iris_x, gFadeControl.iris_y, gFadeControl.iris_size);
+        sub_0801E1EC(gFadeControl.iris_x, gFadeControl.iris_y, IRIS_RADIUS(gFadeControl.iris_size));
         if ((type & FADE_IN_OUT) == 0) {
             gFadeControl.type &= ~FADE_INSTANT;
             ResetFadeMask();
@@ -330,12 +353,12 @@ static u32 sub_080502A4(FadeControl* ctl) {
         gFadeControl.iris_size -= gFadeControl.speed;
         if (delta << 16 <= 0)
             gFadeControl.iris_size = 0;
-        sub_0801E1EC(gFadeControl.iris_x, gFadeControl.iris_y, gFadeControl.iris_size);
+        sub_0801E1EC(gFadeControl.iris_x, gFadeControl.iris_y, IRIS_RADIUS(gFadeControl.iris_size));
         if (!gFadeControl.iris_size)
             return 0;
     } else {
         gFadeControl.iris_size += gFadeControl.speed;
-        sub_0801E1EC(gFadeControl.iris_x, gFadeControl.iris_y, gFadeControl.iris_size);
+        sub_0801E1EC(gFadeControl.iris_x, gFadeControl.iris_y, IRIS_RADIUS(gFadeControl.iris_size));
         if (gFadeControl.iris_size > 150) {
             sub_0801E104();
             return 0;

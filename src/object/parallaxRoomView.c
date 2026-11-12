@@ -7,6 +7,14 @@
 #include "entity.h"
 #include "room.h"
 
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+/* Parallax pivots on the visible centre; 0x78 at native width. */
+#define PARALLAX_CX ((s32)Port_Widescreen_EffectiveViewWidth() / 2)
+#else
+#define PARALLAX_CX 0x78
+#endif
+
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u16 unk_68;
@@ -37,11 +45,11 @@ void ParallaxRoomView(ParallaxRoomViewEntity* this) {
     }
     if ((super->flags & 0x10) == 0) {
         iVar4 = super->x.HALF.HI - gRoomControls.scroll_x;
-        diffX = iVar4 - 0x78;
+        diffX = iVar4 - PARALLAX_CX;
         iVar1 = super->y.HALF.HI - gRoomControls.scroll_y;
         diffY = iVar1 - 0x50;
         if (diffX < 0) {
-            temp = (iVar4 - 0x75);
+            temp = (iVar4 - (PARALLAX_CX - 3));
         } else {
             temp = diffX;
         }

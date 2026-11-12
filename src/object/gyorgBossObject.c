@@ -14,6 +14,9 @@
 #include "effects.h"
 #include "physics.h"
 #include "player.h"
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#endif
 #include "room.h"
 #include "screen.h"
 #include "screenTransitions.h"
@@ -497,7 +500,12 @@ void GyorgBossObject_SpawnChildren(u32 unk0, bool32 fromBlue, u32 animationState
                     tmp->attackOffsetY = -p->offsetY;
                     break;
                 case 1:
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+                    /* From past the live right edge, not inside a wide view. */
+                    tmp->attackOffsetX = p->offsetY + Port_Widescreen_EffectiveViewWidth();
+#else
                     tmp->attackOffsetX = p->offsetY + DISPLAY_WIDTH;
+#endif
                     tmp->attackOffsetY = p->offsetX;
                     break;
                 case 2:

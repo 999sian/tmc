@@ -749,9 +749,6 @@ void DispReset(bool32 refresh) {
     gScreen.vBlankDMA.ready = FALSE;
     DmaStop(0);
 #ifdef PC_PORT
-    /* DmaStop(0) is a host no-op; retail stops DMA0 here after the room-exit
-     * fade, so per-scanline affine HDMA must not leak into the next room. */
-    port_hdma_unregister(0);
     gba_write16(REG_ADDR_DISPCNT, 0);
 #else
     REG_DISPCNT = 0;
@@ -1095,18 +1092,6 @@ void MessageFromFusionTarget(u32 textIndex) {
 void sub_0801E104(void) {
     gScreen.lcd.displayControl &= ~0x6000;
     gScreen.vBlankDMA.ready = FALSE;
-#ifdef PC_PORT
-    /* #103 root cause: this sub only clears vBlankDMA.ready. On GBA that was
-       enough because VBlankIntr ran DmaStop(0) every frame, so the HBlank DMA
-       stopped re-arming the moment `ready` went FALSE. On PC DmaStop is a
-       no-op and the per-scanline HBlank channel keeps firing the stale src
-       table into its dest register until something calls DisableVBlankDMA —
-       corrupting the next scene's BG/window rendering. Tear the channel down
-       here exactly like DisableVBlankDMA does (main.c). This neutralizes the
-       whole class of sub_0801E104-only teardowns: lightManager (dark-room end),
-       whiteTriangleEffect (screen wipe), vaatiAppearingManager Evaporate. */
-    port_hdma_unregister(0);
-#endif
 }
 
 void sub_0801E120(void) {
@@ -1183,11 +1168,16 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
     u8* base = ((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler;
     uVar5 = uVar7 = param_2;
     puVar6 = gUnk_02018EE0;
+    /* Widescreen: a centre past x=240 overflows the 8-bit edges; record the
+     * full span so the PPU can draw the circle across the wide frame. */
+    port_ws_window_table_begin(base);
 
     while (count-- > 0) {
+        s32 wideRight;
         uVar1 = *puVar6++;
         iVar2 = param_1 - uVar1;
         iVar4 = param_1 + uVar1;
+        wideRight = iVar4;
         if (iVar2 < 0) {
             iVar2 = 0;
         }
@@ -1197,10 +1187,12 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
         if (((u16)uVar5 & 0xffff) < 0xa0) {
             base[uVar5 * 2] = iVar4;
             base[uVar5 * 2 + 1] = iVar2;
+            port_ws_window_table_set(base, (int)(u16)uVar5, iVar2, wideRight);
         }
         if (((u16)uVar7 & 0xffff) < 0xa0) {
             base[uVar7 * 2] = iVar4;
             base[uVar7 * 2 + 1] = iVar2;
+            port_ws_window_table_set(base, (int)(u16)uVar7, iVar2, wideRight);
         }
         uVar5--;
         uVar7++;
@@ -1316,6 +1308,12 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
     MemClear(((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler, 0xa00);
     ptr1 = (u32*)gUnk_02018EE0;
     ptr2 = ((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler;
+#ifdef PC_PORT
+    /* Widescreen: edges past x=240 overflow the 8-bit entries; pack them
+     * clamped (240 reads as the frame's right edge) and record the full
+     * span for the PPU, like the iris. */
+    port_ws_window_table_begin(ptr2);
+#endif
     for (y1 = 0xa0; y1 > 0; y1--, ptr2 += 2) {
         x1 = ptr1[0];
         x2 = ptr1[1];
@@ -1330,6 +1328,26 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
         if (x2 > x3) {
             SWAP(x2, x3, y2);
         }
+#ifdef PC_PORT
+        {
+            s32 l = -1, r = -1;
+            if (x1 != 0xffffffff) {
+                l = x1;
+                r = x3;
+            } else if (x2 != x1) {
+                l = x2;
+                r = x3;
+            } else if (x3 != x1) {
+                l = r = x1;
+            }
+            if (r >= 0) {
+                ptr2[0] = (u8)min(r, 240);
+                ptr2[1] = (u8)min(l, 240);
+                port_ws_window_table_set(((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler,
+                                         0xa0 - y1, l, r);
+            }
+        }
+#else
         if (x1 != 0xffffffff) {
             ptr2[0] = x3;
             ptr2[1] = x1;
@@ -1344,6 +1362,7 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
                 }
             }
         }
+#endif
     }
     SetVBlankDMA((u16*)((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler, (u16*)REG_ADDR_WIN0H,
                  ((DMA_ENABLE | DMA_START_HBLANK | DMA_16BIT | DMA_REPEAT | DMA_SRC_INC | DMA_DEST_RELOAD) << 16) +
@@ -1352,7 +1371,14 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
 
 void sub_0801E64C(s32 x1, s32 y1, s32 x2, s32 y2, s32 offset) {
     // GBA Resolutions
+#ifdef PC_PORT
+    /* Widescreen: clamp to the wide view; sub_0801E49C records the full
+     * edges for the PPU and packs the 8-bit ones as before. */
+    extern int Port_Widescreen_EffectiveViewWidth(void);
+    const s32 MAX_X_COORD = max(240, Port_Widescreen_EffectiveViewWidth());
+#else
     const s32 MAX_X_COORD = 240;
+#endif
     const s32 MAX_Y_COORD = 160;
 
     s32 slope, preciseX, tmp;

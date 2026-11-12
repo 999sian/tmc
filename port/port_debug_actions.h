@@ -45,6 +45,12 @@ void Port_DebugAction_SetNoclip(int on);
 int  Port_DebugQuery_Noclip(void);
 int  Port_Debug_NoclipEnabled(void);
 
+/* No-damage debug toggle, same shape as noclip: ModHealth drops negative
+ * deltas while it is on. Off under Console-Parity. In-memory only. */
+void Port_DebugAction_SetNoDamage(int on);
+int  Port_DebugQuery_NoDamage(void);
+int  Port_Debug_NoDamageEnabled(void);
+
 /* Minish transformation debug toggles. */
 void Port_DebugAction_ToggleMinish(void);
 int  Port_DebugQuery_IsMinish(void);

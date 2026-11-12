@@ -16,6 +16,8 @@
 #include "physics.h"
 #ifdef PC_PORT
 #include <stdio.h>
+#include "port_widescreen.h"
+#include "port_hdma.h"
 #endif
 
 extern void DisableVBlankDMA(void);
@@ -42,6 +44,46 @@ typedef struct {
 } PACKED LightRayManagerProp;
 
 #define ZS(this) ((u8*)&this->speed)
+
+#if defined(PC_PORT) && defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+/* Minish Woods rays (sub_08057450) are a screen-locked 256 px image whose
+ * rays fill its right half and fall from the top-right corner. Wider than
+ * 256, BG3 wraps and shows the image's cut right edge a second time, so
+ * WIN0 keeps BG3 to the image's own 256 columns at the view's right edge.
+ * WIN0 is only taken while no other window is on, and handed back as soon
+ * as anything else changes it. */
+enum { kRayWinIn = 0x3f, kRayWinOut = 0x37 }; /* outside: all but BG3 */
+static u16 sRayWinH; /* WIN0H while the rays own WIN0, else 0 */
+
+static int LightRayManager_OwnsWindow(void) {
+    return sRayWinH != 0 && (gScreen.lcd.displayControl & DISPCNT_WIN0_ON) &&
+           gScreen.controls.window0HorizontalDimensions == sRayWinH &&
+           gScreen.controls.windowInsideControl == kRayWinIn && gScreen.controls.windowOutsideControl == kRayWinOut;
+}
+
+static void LightRayManager_ReleaseWindow(void) {
+    if (LightRayManager_OwnsWindow())
+        gScreen.lcd.displayControl &= ~DISPCNT_WIN0_ON;
+    sRayWinH = 0;
+}
+
+static void LightRayManager_ClipWide(int view) {
+    const int left = view - 256;
+    const u32 others = DISPCNT_WIN1_ON | DISPCNT_OBJWIN_ON;
+    if (left <= 0 || (gScreen.lcd.displayControl & others) ||
+        ((gScreen.lcd.displayControl & DISPCNT_WIN0_ON) && !LightRayManager_OwnsWindow())) {
+        LightRayManager_ReleaseWindow();
+        return;
+    }
+    sRayWinH = (u16)((min(left, DISPLAY_WIDTH) << 8) | DISPLAY_WIDTH);
+    gScreen.controls.window0HorizontalDimensions = sRayWinH;
+    gScreen.controls.window0VerticalDimensions = DISPLAY_HEIGHT;
+    gScreen.controls.windowInsideControl = kRayWinIn;
+    gScreen.controls.windowOutsideControl = kRayWinOut;
+    port_ws_window_static(0, sRayWinH, left, view);
+    gScreen.lcd.displayControl |= DISPCNT_WIN0_ON;
+}
+#endif
 
 void LightRayManager_Main(LightRayManager* this) {
     u8 gfxGroup;
@@ -91,6 +133,9 @@ static void LightRayManager_OnEnterRoom(LightRayManager* this) {
 }
 
 static void LightRayManager_OnExitRoom(void) {
+#if defined(PC_PORT) && defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    LightRayManager_ReleaseWindow();
+#endif
     gScreen.lcd.displayControl &= ~DISPCNT_BG3_ON;
     gScreen.controls.layerFXControl = 0;
     DisableVBlankDMA();
@@ -205,6 +250,9 @@ void LightRayManager_Action3(LightRayManager* this) {
             this->unk_22 = 0;
             this->unk_21 = 0;
             gScreen.vBlankDMA.ready = FALSE;
+#if defined(PC_PORT) && defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+            LightRayManager_ReleaseWindow();
+#endif
         }
     }
 }
@@ -244,6 +292,15 @@ void sub_080573AC(LightRayManager* this) {
 void sub_08057450(LightRayManager* this) {
     s32 y;
     gScreen.bg3.xOffset = 0x10;
+#if defined(PC_PORT) && defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    /* Keep the image's right edge on the view's right edge, as on the GBA,
+     * instead of at x=240 with its empty half wrapped in beside it. */
+    {
+        const int view = Port_Widescreen_EffectiveViewWidth();
+        gScreen.bg3.xOffset -= view - 240;
+        LightRayManager_ClipWide(view);
+    }
+#endif
     y = gRoomControls.scroll_y;
     y -= gRoomControls.origin_y;
     y >>= 2;

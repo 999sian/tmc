@@ -132,6 +132,14 @@ static uint16_t mode1_tile_index(Mode1TilemapEntry entry) {
     return entry.raw & 0x03FFu;
 }
 
+/* Clamp published wide window edges to the frame; never invert the span. */
+static void mode1_ws_window_edges(uint16_t left, uint16_t right, int frame_width, int* out_left, int* out_right) {
+    int l = left > frame_width ? frame_width : (int)left;
+    int r = right > frame_width ? frame_width : (int)right;
+    *out_left = l;
+    *out_right = r < l ? l : r;
+}
+
 static bool mode1_tile_hflip(Mode1TilemapEntry entry) {
     return ((entry.raw >> 10u) & 1u) != 0u;
 }
@@ -884,14 +892,29 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
         evy = 16;
     }
 
-    if (win0_right > frame_width) {
+    /* X2 >= 240 means "to the right screen edge" on hardware; a wide frame's
+     * edge is frame_width, or full-width windows exclude the extra columns. */
+    if (win0_right >= MODE1_GBA_BG_CLIP_X) {
         win0_right = frame_width;
     }
     if (win0_bottom > MODE1_GBA_HEIGHT) {
         win0_bottom = MODE1_GBA_HEIGHT;
     }
-    if (win1_right > frame_width) {
+    if (win1_right >= MODE1_GBA_BG_CLIP_X) {
         win1_right = frame_width;
+    }
+    /* Wide frames: the port publishes full window edges in unused I/O when
+     * the 8-bit WINxH entry came from a table built past x=240. */
+    if (frame_width > MODE1_GBA_BG_CLIP_X) {
+        uint16_t ws_flags = virtuappu_mode1_io_read16(MODE1_IO_WS_WIN_FLAGS);
+        if (ws_flags & 1u) {
+            mode1_ws_window_edges(virtuappu_mode1_io_read16(MODE1_IO_WS_WIN0_L),
+                                  virtuappu_mode1_io_read16(MODE1_IO_WS_WIN0_R), frame_width, &win0_left, &win0_right);
+        }
+        if (ws_flags & 2u) {
+            mode1_ws_window_edges(virtuappu_mode1_io_read16(MODE1_IO_WS_WIN1_L),
+                                  virtuappu_mode1_io_read16(MODE1_IO_WS_WIN1_R), frame_width, &win1_left, &win1_right);
+        }
     }
     if (win1_bottom > MODE1_GBA_HEIGHT) {
         win1_bottom = MODE1_GBA_HEIGHT;

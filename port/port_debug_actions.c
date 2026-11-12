@@ -637,6 +637,21 @@ int Port_Debug_NoclipEnabled(void) {
     return (sNoclip && !Port_Config_GetConsoleParity()) ? 1 : 0;
 }
 
+static bool sNoDamage = false;
+
+void Port_DebugAction_SetNoDamage(int on) {
+    sNoDamage = on != 0;
+}
+
+int Port_DebugQuery_NoDamage(void) {
+    return sNoDamage ? 1 : 0;
+}
+
+int Port_Debug_NoDamageEnabled(void) {
+    extern bool Port_Config_GetConsoleParity(void);
+    return (sNoDamage && !Port_Config_GetConsoleParity()) ? 1 : 0;
+}
+
 void Port_DebugAction_ToggleMinish(void) {
     if (gMain.task != TASK_GAME)
         return;

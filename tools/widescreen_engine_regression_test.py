@@ -23,14 +23,42 @@ def function(source, signature):
 def main():
     stubs = (ROOT / 'port/port_linked_stubs.c').read_text()
     message = (ROOT / 'src/message.c').read_text()
-    functions = [function(stubs, name) for name in (
+    roll_start = stubs.index('static u16 sWsRollBottom[')
+    roll_state = stubs[roll_start:stubs.index('} sWsRoll;', roll_start) + len('} sWsRoll;')]
+    source_start = stubs.index('#define WS_BG_SOURCE_SLOTS')
+    source_state = stubs[source_start:stubs.index('} sWsBgSource[', source_start) + len('} sWsBgSource[WS_BG_SOURCE_SLOTS];')]
+    functions = [roll_state, source_state, 'static u32 sWsWrapBgMask;\nstatic u32 sWsWrapBgArea;'] + [function(stubs, name) for name in (
+        'static int Port_WidescreenRoomShown(void)',
+        'static int Port_WidescreenSteadyFallback(void)',
         'int Port_Widescreen_FallbackNative(void)',
+        'int Port_Widescreen_EffectiveViewWidth(void)',
+        'static int Port_WidescreenSteadyViewWidth(void)',
+        'int Port_Widescreen_LatchedFrameWidth(void)',
+        'static int Port_WidescreenRollComposite(void)',
+        'static u16 Port_WidescreenRollFetch(',
+        'static void Port_WidescreenRollComposeBuffer(',
+        'void Port_Widescreen_RollBegin(void)',
+        'static void Port_WidescreenRollClamp(',
+        'void Port_Widescreen_RollStart(void)',
+        'int Port_Widescreen_RollWidthAt(',
+        'int Port_Widescreen_RollCameraK(',
+        'static int Port_WidescreenRollFitWidth(',
+        'void Port_Widescreen_RollStep(void)',
+        'int Port_Widescreen_RollEnd(void)',
+        'void Port_Widescreen_RollHandoff(void)',
         'int Port_Widescreen_CameraRestX(int target_x)',
+        'int Port_Widescreen_ShadowsLive(void)',
         'static void Port_WidescreenShadow_Populate(',
         'static void Port_WidescreenShadow_PopulateOverlay(',
+        'void Port_Widescreen_WrapBg(int bg)',
         'static int Port_WidescreenPpuBgForControl(',
+        'void Port_Widescreen_BgWindowSource(',
+        'static int Port_WidescreenShadow_PopulateSource(',
     )]
     functions.append(function(message, 'bool Message_GetWindowRect('))
+    functions.append(function(stubs, 'static int Port_WidescreenHoldBlankFrame(void)'))
+    functions.append(function(stubs, 'static void Port_WidescreenAdvanceTail(void)'))
+    functions.append(function(stubs, 'static void Port_WidescreenUpdateShadowsFrame(void)'))
     functions.append(function(stubs, 'void Port_Widescreen_UpdateShadows(void)'))
     with tempfile.TemporaryDirectory(prefix='tmc-ws-engine-') as directory:
         generated = Path(directory) / 'widescreen_helpers.h'

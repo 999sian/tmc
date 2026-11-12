@@ -18,6 +18,9 @@
 #include "screen.h"
 #include "tileMap.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port_hdma.h"
+#endif
 
 #ifdef PC_PORT
 #include "port/port_generic_entity.h"
@@ -231,6 +234,12 @@ void Scroll2Sub1(RoomControls* controls) {
     controls->scrollSubAction = 2;
     controls->unk_18 = 0;
     gUpdateVisibleTiles = 2;
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+    {
+        extern void Port_Widescreen_RollStart(void);
+        Port_Widescreen_RollStart();
+    }
+#endif
 }
 
 void Scroll2Sub2(RoomControls* controls) {
@@ -278,6 +287,13 @@ void Scroll2Sub2(RoomControls* controls) {
             }
             break;
     }
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+    /* Wide transitions travel the full view width, not the engine's 240px. */
+    {
+        extern void Port_Widescreen_RollStep(void);
+        Port_Widescreen_RollStep();
+    }
+#endif
 
     controls->shake_duration = 0;
     UpdateScreenShake();
@@ -286,12 +302,20 @@ void Scroll2Sub2(RoomControls* controls) {
 void sub_0807FEC8(RoomControls* controls) {
     controls->scrollAction = 0;
 #if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
-    /* The last rolling update still contains outgoing-room tiles. Restore
-     * the wide camera and fully refill VRAM before revealing the sides. */
+    /* The last rolling update still contains outgoing-room tiles. Settle the
+     * camera at the destination's rest and fully refill VRAM. A wide
+     * transition always snaps: it ran at the wide width even when the
+     * destination settles native. */
     {
         extern int Port_Widescreen_EffectiveViewWidth(void);
-        if (Port_Widescreen_EffectiveViewWidth() > 240) {
+        extern int Port_Widescreen_RollEnd(void);
+        const int rolledWide = Port_Widescreen_RollEnd();
+        if (rolledWide || Port_Widescreen_EffectiveViewWidth() > 240) {
             sub_080809D4();
+        }
+        if (rolledWide) {
+            extern void Port_Widescreen_RollHandoff(void);
+            Port_Widescreen_RollHandoff();
         }
     }
 #endif
@@ -384,6 +408,9 @@ void Scroll5Sub2(RoomControls* controls) {
             left = 0;
         }
         right = diffX + controls->unk_18 - 8;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        const s32 wideRight = right;
+#endif
         if (right > DISPLAY_WIDTH) {
             right = DISPLAY_WIDTH;
         }
@@ -397,6 +424,10 @@ void Scroll5Sub2(RoomControls* controls) {
             top = DISPLAY_HEIGHT;
         }
         gScreen.controls.window1HorizontalDimensions = ((left & 0xff) << 8) | (right & 0xff);
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        /* The digging-cave iris box can extend past x=240. */
+        port_ws_window_static(1, gScreen.controls.window1HorizontalDimensions, left, wideRight);
+#endif
         gScreen.controls.window1VerticalDimensions = ((bottom & 0xff) << 8) | (top & 0xff);
     }
     if (controls->unk_18 == 0) {
@@ -451,6 +482,9 @@ void Scroll5Sub5(RoomControls* controls) {
             left = 0;
         }
         right = diffX + controls->unk_18;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        const s32 wideRight = right;
+#endif
         if (right > DISPLAY_WIDTH) {
             right = DISPLAY_WIDTH;
         }
@@ -464,6 +498,10 @@ void Scroll5Sub5(RoomControls* controls) {
             top = DISPLAY_HEIGHT;
         }
         gScreen.controls.window1HorizontalDimensions = ((left & 0xff) << 8) | (right & 0xff);
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        /* The digging-cave iris box can extend past x=240. */
+        port_ws_window_static(1, gScreen.controls.window1HorizontalDimensions, left, wideRight);
+#endif
         gScreen.controls.window1VerticalDimensions = ((bottom & 0xff) << 8) | (top & 0xff);
     }
     if (controls->unk_1c == 0) {

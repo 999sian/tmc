@@ -771,10 +771,11 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * on the GPU path yet — falls back to black. */
     SDL_FColor clearColor{ 0.0f, 0.0f, 0.0f, 1.0f };
     {
-        const PortBgFill bf = Port_Config_BgFill();
-        if (bf == PORT_BG_FILL_SOLID_COLOR) {
-            uint8_t r = 0, g = 0, b = 0;
-            Port_Config_BgFillColor(&r, &g, &b);
+        uint8_t r = 0, g = 0, b = 0;
+        const bool edge = Port_PPU_EdgeFill(&r, &g, &b) != 0;
+        if (edge || Port_Config_BgFill() == PORT_BG_FILL_SOLID_COLOR) {
+            if (!edge)
+                Port_Config_BgFillColor(&r, &g, &b);
             clearColor.r = (float)r / 255.0f;
             clearColor.g = (float)g / 255.0f;
             clearColor.b = (float)b / 255.0f;
@@ -875,7 +876,9 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * sSampler (LINEAR min/mag) gives the soft "ambient mode" halo
      * that the SDL_Renderer path achieves via SDL_RenderTexture into
      * the stage rect. */
-    if (Port_Config_BgFill() == PORT_BG_FILL_BLURRED_FRAME && (stageW != frameW || stageH != frameH)) {
+    uint8_t edgeR, edgeG, edgeB;
+    if (Port_Config_BgFill() == PORT_BG_FILL_BLURRED_FRAME && (stageW != frameW || stageH != frameH) &&
+        !Port_PPU_EdgeFill(&edgeR, &edgeG, &edgeB)) {
         SDL_GPUViewport vp = {};
         vp.x = (float)stageX;
         vp.y = (float)stageY;
