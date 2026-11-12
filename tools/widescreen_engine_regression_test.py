@@ -27,7 +27,7 @@ def main():
     roll_state = stubs[roll_start:stubs.index('} sWsRoll;', roll_start) + len('} sWsRoll;')]
     source_start = stubs.index('#define WS_BG_SOURCE_SLOTS')
     source_state = stubs[source_start:stubs.index('} sWsBgSource[', source_start) + len('} sWsBgSource[WS_BG_SOURCE_SLOTS];')]
-    functions = [roll_state, source_state, 'static u32 sWsWrapBgMask;'] + [function(stubs, name) for name in (
+    functions = [roll_state, source_state, 'static u32 sWsWrapBgMask;\nstatic u32 sWsWrapBgArea;'] + [function(stubs, name) for name in (
         'static int Port_WidescreenRoomShown(void)',
         'static int Port_WidescreenSteadyFallback(void)',
         'int Port_Widescreen_FallbackNative(void)',

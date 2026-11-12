@@ -161,7 +161,8 @@ int main(void) {
         if (!overlays[i].map)
             CHECK(Port_Widescreen_LatchedFrameWidth() == 240);
     }
-    /* A BG1 texture (Mount Crenel rain) wraps only for the frame it opts in. */
+    /* A BG1 texture (Mount Crenel rain) wraps once opted in, without renewal
+     * (its manager freezes during rolls and text), until the area changes. */
     gRoomControls.area = AREA_HYRULE_FIELD;
     gScreen.bg3.control = 0x1e05;
     gMapBottom.bgSettings = &overlayMap;
@@ -177,6 +178,12 @@ int main(void) {
     CHECK(virtuappu_mode1_ws_shadow_base_tile[1] == 0);
     if (virtuappu_mode1_ws_shadow[1])
         CHECK(memcmp(virtuappu_mode1_ws_shadow[1], screen, sizeof(screen)) == 0);
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] != NULL);
+    gRoomControls.area = AREA_MINISH_WOODS;
+    Port_Widescreen_UpdateShadows();
+    CHECK(virtuappu_mode1_ws_shadow[1] == NULL);
+    gRoomControls.area = AREA_HYRULE_FIELD;
     Port_Widescreen_UpdateShadows();
     CHECK(virtuappu_mode1_ws_shadow[1] == NULL);
     gScreen.bg1.control = 0x1c00;

@@ -1726,9 +1726,15 @@ static void Port_WidescreenShadow_PopulateOverlay(int bg, const u16* screen, u16
     virtuappu_mode1_ws_shadow[bg] = shadow;
 }
 
+/* Held for the requesting area, not one frame: managers stop running during
+ * room rolls and text boxes while the texture stays on screen. */
 static u32 sWsWrapBgMask;
+static u32 sWsWrapBgArea;
 
 void Port_Widescreen_WrapBg(int bg) {
+    if (sWsWrapBgArea != (u32)gRoomControls.area)
+        sWsWrapBgMask = 0;
+    sWsWrapBgArea = (u32)gRoomControls.area;
     if (bg == 1 || bg == 2)
         sWsWrapBgMask |= 1u << bg;
 }
@@ -1841,8 +1847,8 @@ static void Port_WidescreenAdvanceTail(void) {
 
 static void Port_WidescreenUpdateShadowsFrame(void) {
     port_ws_window_latch(gScreen.controls.window0HorizontalDimensions, gScreen.controls.window1HorizontalDimensions);
-    const u32 wrapBgMask = sWsWrapBgMask;
-    sWsWrapBgMask = 0;
+    if (sWsWrapBgArea != (u32)gRoomControls.area)
+        sWsWrapBgMask = 0;
     if (Port_WidescreenHoldBlankFrame())
         return;
     for (int i = 0; i < MODE1_GBA_BG_COUNT; i++)
@@ -1939,7 +1945,7 @@ static void Port_WidescreenUpdateShadowsFrame(void) {
     if (Port_Widescreen_ShadowsLive()) {
         const u32 controls[MODE1_GBA_BG_COUNT] = { 0, gScreen.bg1.control, gScreen.bg2.control, 0 };
         for (int bg = 1; bg <= 2; ++bg) {
-            if ((wrapBgMask & (1u << bg)) && virtuappu_mode1_ws_shadow[bg] == NULL &&
+            if ((sWsWrapBgMask & (1u << bg)) && virtuappu_mode1_ws_shadow[bg] == NULL &&
                 (gScreen.lcd.displayControl & (DISPCNT_BG0_ON << bg)) && (controls[bg] & 0xc000u) == 0) {
                 const u32 sb = (controls[bg] >> 8) & 0x1fu;
                 Port_WidescreenShadow_PopulateOverlay(bg, (const u16*)(gVram + sb * 0x800u), sWsShadowSource[bg]);
