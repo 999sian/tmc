@@ -1268,10 +1268,6 @@ void sub_0802E1D0(GleerokEntity* this) {
                             this->unk_74 = 0;
                             this->unk_75 = 0x10;
                             this->unk_7c.HALF_U.LO = 0xB;
-                            /* Issue #51: explicitly start the fade in fade-out
-                             * direction. sub_0802E300 reads unk_83 to drive
-                             * the alpha transitions. */
-                            this->unk_83 = 0;
                             gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
                             gScreen.controls.layerFXControl = 0x240;
                             InitScreenShake(30, 0);
@@ -1294,62 +1290,33 @@ void sub_0802E300(GleerokEntity* this) {
     Entity* entity;
     Gleerok_HeapStruct* heap;
 
-    /* Issue #51 — Cave-of-Flames boss "doesn't resurface for round 3".
-     *
-     * The original decompiled structure was:
-     *
-     *   if (!(u79 & 0x80))      u7c--;
-     *   else if (u74 != 0x10)   { decrement u7c; on 0, reset u7c=0xb,
-     *                             u74++, u75--; }
-     *   if (u7c == 0) { fade-in step (u74--, u75++); }
-     *
-     * which can never enter the fade-in branch in practice: while u74<0x10
-     * Phase B keeps re-resetting u7c to 0xb whenever it hits 0, so the
-     * fade-in `if (u7c == 0)` test is always false. Once u74 reaches 0x10
-     * Phase B is gated off and nothing decrements u7c — it stays at 0xb
-     * forever. The fade-out completes visually (lava fills the room and
-     * sits there), but the boss never resurfaces. Confirmed by tick-by-
-     * tick trace of (u79, u74, u75, u7c) on Linux: state freezes at
-     * (0x81, 0x10, 0x00, 0x0b).
-     *
-     * Fix: track fade direction explicitly in unk_83 (otherwise unused on
-     * GleerokEntity), and always decrement u7c while submerged so Phase C
-     * can drive both the fade-out bump and the fade-in bump on the same
-     * 11-tick cadence.
-     *   unk_83 = 0  →  fade-out (lava rising, u74 climbing to 0x10)
-     *   unk_83 = 1  →  fade-in  (lava receding, u75 climbing to 0x10)
-     * sub_0802E1D0 sets unk_83=0 when entering the submerged splash path. */
+    /* Submerged (unk_79 & 0x80): fade the lava-flood sprites (GleerokParticle
+     * type 1) in over 16 steps, then hold. Each flood sprite lives while
+     * unk_79 & 0x80 is set and zeroes unk_7c when it has receded; that is the
+     * only resurface trigger. Do not resurface on a timer: the flood sprites
+     * keep their hitboxes, so fading them out early leaves invisible lava that
+     * still burns Link. */
     if ((this->unk_79 & 0x80) == 0) {
         this->unk_7c.HALF.LO--;
-    } else if (this->unk_7c.HALF_U.LO) {
-        --this->unk_7c.HALF_U.LO;
+    } else if (this->unk_74 != 0x10) {
+        if (this->unk_7c.HALF_U.LO) {
+            if (--this->unk_7c.HALF_U.LO == 0) {
+                this->unk_7c.HALF_U.LO = 0xb;
+                this->unk_75--;
+                this->unk_74++;
+                gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
+            }
+        }
     }
 
     if (this->unk_7c.HALF_U.LO == 0) {
         if (this->unk_79 & 0x80) {
-            if (this->unk_83 == 0) {
-                /* Fade-out cadence: u74 0→0x10, u75 0x10→0. When u74
-                 * tops out, flip into fade-in mode. */
-                if (this->unk_74 != 0x10) {
-                    this->unk_7c.HALF_U.LO = 0xb;
-                    this->unk_75--;
-                    this->unk_74++;
-                    gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
-                    return;
-                }
-                this->unk_83 = 1;
-                /* Fall through into fade-in branch this same tick. */
-            }
             if (this->unk_75 != 0x10) {
                 this->unk_7c.HALF_U.LO = 0xb;
                 this->unk_75++;
-                this->unk_74--;
                 gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
                 return;
             }
-            /* Fade-in done. Reset the phase flag so the next round's
-             * submerge starts clean. */
-            this->unk_83 = 0;
         }
 
         this->unk_79 &= ~0x80;
